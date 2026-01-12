@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nepub-reader</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #333333;
+            --text-secondary: #666666;
+            --card-bg: #f9f9f9;
+            --code-bg: #f4f4f4;
+            --border-color: #cccccc;
+            --link-color: #0066cc;
+            --button-bg: #0066cc;
+            --button-hover: #0055aa;
+            --input-bg: #ffffff;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --text-color: #e0e0e0;
+                --text-secondary: #a0a0a0;
+                --card-bg: #2a2a2a;
+                --code-bg: #333333;
+                --border-color: #444444;
+                --link-color: #6ab0f3;
+                --button-bg: #4a90d9;
+                --button-hover: #3a7bc8;
+                --input-bg: #2a2a2a;
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.8;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        h1, h2, h3 { color: var(--text-color); }
+        code {
+            background: var(--code-bg);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        a { color: var(--link-color); }
+        input[type="text"], input[type="number"] {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--input-bg);
+            color: var(--text-color);
+        }
+        input[type="text"].url-input {
+            flex: 1;
+            min-width: 300px;
+        }
+        input[type="text"].id-input {
+            width: 120px;
+        }
+        input[type="number"] {
+            width: 80px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            background: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: var(--button-hover); }
+        .form-group {
+            margin: 20px 0;
+            padding: 15px;
+            background: var(--card-bg);
+            border-radius: 8px;
+        }
+        .form-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 1em;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .hint {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>nepub-reader</h1>
+    <p>小説家になろうの作品を縦書き表示で快適に読めるビューアーです。</p>
+
+    <div class="form-group">
+        <h3>小説IDで開く</h3>
+        <form action="/go-id" method="get">
+            <div class="form-row">
+                <input type="text" name="novel_id" class="id-input" placeholder="小説ID" required>
+                <input type="number" name="episode" value="1" min="1" max="10000" required>
+                <span>話から</span>
+                <button type="submit">読む</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="form-group">
+        <h3>URLで開く</h3>
+        <form action="/go" method="get">
+            <div class="form-row">
+                <input type="text" name="url" class="url-input" placeholder="https://ncode.syosetu.com/nXXXXXX/1/" required>
+                <button type="submit">読む</button>
+            </div>
+        </form>
+        <p class="hint">エピソードURLを入力するとその話から、小説トップURLを入力すると1話から読めます。</p>
+    </div>
+
+    <div class="form-group">
+        <h3>操作方法</h3>
+        <p class="hint" style="margin-top: 0;">
+            <b>← / → キー</b>: ページ移動（端に到達すると次/前のエピソードへ自動移動）<br>
+            <b>メニューバー</b>: 文字サイズ変更
+        </p>
+    </div>
+</body>
+</html>
