@@ -5,7 +5,7 @@ Bibi.preset({
     //-- Bookshelf
     //----------------------------------------------------------------------------------------------------------------------------------------------
 
-    "bookshelf": "../../bibi-bookshelf", // Relative path from this preset file to the bookshelf directory. "/" at the end is ignored. (To use a path begins with "http(s)://", read <01> at the bottom of this preset file.)
+    "bookshelf": "../../bibi-bookshelf", // Relative path from this preset file to the bookshelf directory.
 
 
     //==============================================================================================================================================
@@ -42,8 +42,8 @@ Bibi.preset({
     "use-nombre": "yes", // "yes" or "no" or "desktop" or "mobile"
 
     "use-font-size-changer": "yes", // "yes" or "no" or "desktop" or "mobile"
-    "base-font-size": "auto", // Number of pixel or "auto"
-    "font-size-scale-per-step": 1.25, // Number of scale
+    "base-font-size": 45, // Number of pixel or "auto"
+    "font-size-scale-per-step": 1.2, // Number of scale
 
     "use-loupe": "desktop", // "yes" or "no" or "desktop" or "mobile" (Note: Loupe buttons will not appear in touch-devices even if it is set "yes" or "mobile".)
     "loupe-max-scale": 4, // Number of scale (greater than 1)
@@ -96,6 +96,8 @@ Bibi.preset({
     // "id" must be defined in each extension file.
     "extensions": [
         // { "src": "../extensions/FOLDER-NAME-IF-EXISTS/FILE-NAME.js" }, // <THIS LINE IS AN EXAMPLE>
+        { "src": "../extensions/custom-font.js" },
+        { "src": "../extensions/narou-episode-nav.js" },
         ""],
 
 

@@ -24,6 +24,37 @@
 	<script id="bibi-script" src="resources/scripts/bibi.js"></script>
 	<script id="bibi-preset" src="presets/default.js" data-bibi-bookshelf=""></script>
 
+	<style id="dark-mode-style">
+		html.dark-mode,
+		html.dark-mode body,
+		html.dark-mode #bibi-main,
+		html.dark-mode #bibi-main-book,
+		html.dark-mode .item-box {
+			background: #fff !important;
+		}
+
+		html.dark-mode {
+			filter: invert(1) hue-rotate(180deg);
+		}
+
+		html.dark-mode img,
+		html.dark-mode video,
+		html.dark-mode picture,
+		html.dark-mode svg image {
+			filter: invert(1) hue-rotate(180deg);
+		}
+	</style>
+	<script>
+		(function () {
+			var darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+			function applyDarkMode(isDark) {
+				document.documentElement.classList.toggle('dark-mode', isDark);
+			}
+			applyDarkMode(darkModeQuery.matches);
+			darkModeQuery.addEventListener('change', function (e) { applyDarkMode(e.matches); });
+		})();
+	</script>
+
 </head>
 
 
