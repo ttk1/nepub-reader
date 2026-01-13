@@ -97,6 +97,56 @@
             color: var(--text-secondary);
             margin-top: 8px;
         }
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-item a {
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .history-item a:hover {
+            text-decoration: underline;
+        }
+        .history-meta {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+        .history-empty {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        .history-clear {
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            padding: 4px 8px;
+            border: 1px solid var(--border-color);
+        }
+        .history-clear:hover {
+            background: var(--card-bg);
+            color: var(--text-color);
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .history-header h3 {
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -126,6 +176,14 @@
         <p class="hint">エピソードURLを入力するとその話から、小説トップURLを入力すると1話から読めます。</p>
     </div>
 
+    <div class="form-group" id="history-section" style="display: none;">
+        <div class="history-header">
+            <h3>最近読んだ作品</h3>
+            <button class="history-clear" onclick="clearHistory()">履歴をクリア</button>
+        </div>
+        <ul class="history-list" id="history-list"></ul>
+    </div>
+
     <div class="form-group">
         <h3>操作方法</h3>
         <p class="hint" style="margin-top: 0;">
@@ -133,5 +191,66 @@
             <b>メニューバー</b>: 文字サイズ変更
         </p>
     </div>
+
+    <script>
+        (function() {
+            var STORAGE_KEY = 'nepub_reading_history';
+
+            function formatDate(isoString) {
+                var date = new Date(isoString);
+                var now = new Date();
+                var diff = now - date;
+                var minutes = Math.floor(diff / 60000);
+                var hours = Math.floor(diff / 3600000);
+                var days = Math.floor(diff / 86400000);
+                if (minutes < 1) return 'たった今';
+                if (minutes < 60) return minutes + '分前';
+                if (hours < 24) return hours + '時間前';
+                if (days < 7) return days + '日前';
+                return date.toLocaleDateString('ja-JP');
+            }
+
+            function loadHistory() {
+                var section = document.getElementById('history-section');
+                var list = document.getElementById('history-list');
+                var history = [];
+                try {
+                    var stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored) history = JSON.parse(stored);
+                } catch (e) {
+                    history = [];
+                }
+                if (history.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+                section.style.display = 'block';
+                list.innerHTML = '';
+                history.forEach(function(item) {
+                    var li = document.createElement('li');
+                    li.className = 'history-item';
+                    var link = document.createElement('a');
+                    link.href = '/read/' + item.novel_id + '/' + item.last_episode;
+                    var title = item.novel_title || (item.novel_id + ' - ' + item.last_episode + '話');
+                    link.textContent = title;
+                    var meta = document.createElement('span');
+                    meta.className = 'history-meta';
+                    meta.textContent = formatDate(item.last_accessed);
+                    li.appendChild(link);
+                    li.appendChild(meta);
+                    list.appendChild(li);
+                });
+            }
+
+            window.clearHistory = function() {
+                if (confirm('読書履歴をすべて削除しますか？')) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    loadHistory();
+                }
+            };
+
+            loadHistory();
+        })();
+    </script>
 </body>
 </html>

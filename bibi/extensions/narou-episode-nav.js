@@ -92,6 +92,58 @@ Bibi.x({
         }
     });
 
+    // 読書履歴を LocalStorage に保存
+    function saveReadingHistory(info, novelTitle) {
+        if (!info) return;
+        var STORAGE_KEY = 'nepub_reading_history';
+        var MAX_HISTORY = 50;
+        var history = [];
+        try {
+            var stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) history = JSON.parse(stored);
+        } catch (e) {
+            history = [];
+        }
+        // 既存のエントリを探す
+        var existingIndex = history.findIndex(function(item) {
+            return item.novel_id === info.novel;
+        });
+        var entry = {
+            novel_id: info.novel,
+            novel_title: novelTitle || info.novel,
+            last_episode: info.episode,
+            last_accessed: new Date().toISOString()
+        };
+        if (existingIndex !== -1) {
+            // 既存エントリを更新して先頭に移動
+            history.splice(existingIndex, 1);
+        }
+        history.unshift(entry);
+        // 最大件数を超えたら古いものを削除
+        if (history.length > MAX_HISTORY) {
+            history = history.slice(0, MAX_HISTORY);
+        }
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+        } catch (e) {
+            console.warn('Failed to save reading history:', e);
+        }
+    }
+
+    // EPUBのメタデータから小説タイトルを取得
+    function getNovelTitle() {
+        try {
+            // B.Package.Metadata から title を取得
+            if (B && B.Package && B.Package.Metadata && B.Package.Metadata.title) {
+                var title = B.Package.Metadata.title[0];
+                if (title) return title;
+            }
+        } catch (e) {
+            console.warn('Failed to get novel title:', e);
+        }
+        return null;
+    }
+
     // 本の読み込み完了後の処理
     E.bind('bibi:opened', function() {
         // edge=foot が指定されている場合、末尾へ移動
@@ -106,6 +158,13 @@ Bibi.x({
                     item.contentDocument.addEventListener('keydown', handleKeyDown, true);
                 }
             });
+        }
+
+        // 読書履歴を保存
+        var episodeInfo = getEpisodeInfo();
+        if (episodeInfo) {
+            var novelTitle = getNovelTitle();
+            saveReadingHistory(episodeInfo, novelTitle);
         }
     });
 });

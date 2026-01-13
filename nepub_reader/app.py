@@ -58,6 +58,16 @@ def get_cache_path(novel_id: str, episode_num: int) -> Path:
     return CACHE_DIR / get_cache_filename(novel_id, episode_num)
 
 
+def extract_novel_title(html_content: str) -> str | None:
+    """エピソードページのHTMLから小説タイトルを抽出"""
+    import html
+    # <title>作品タイトル - エピソードタイトル</title> から取得
+    match = re.search(r'<title>(.+?)</title>', html_content)
+    if match:
+        return html.escape(match.group(1).strip())
+    return None
+
+
 def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
     """目次を読み込まずに、エピソード番号から直接EPUBを生成（1話単位）"""
     cache_path = get_cache_path(novel_id, episode_num)
@@ -68,8 +78,13 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
 
     # エピソードページを直接取得
     episode_url = f"https://ncode.syosetu.com/{novel_id}/{episode_num}/"
+    html = get(episode_url)
+
+    # 小説タイトルを抽出
+    novel_title = extract_novel_title(html) or novel_id
+
     parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
-    parser.feed(get(episode_url))
+    parser.feed(html)
 
     episode_title = parser.title
     paragraphs = parser.paragraphs
@@ -139,7 +154,7 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
             zf.writestr("src/style.css", style())
             zf.writestr(
                 "src/content.opf",
-                content(f"{novel_id} - {episode_num}", "", timestamp, episodes, unique_images),
+                content(novel_title, "", timestamp, episodes, unique_images),
             )
             zf.writestr("src/navigation.xhtml", nav(chapters))
             zf.writestr("src/metadata.json", json.dumps(metadata))
