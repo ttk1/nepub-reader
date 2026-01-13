@@ -1,4 +1,5 @@
 import datetime
+import html
 import json
 import logging
 import os
@@ -82,8 +83,6 @@ def get_cache_path(novel_id: str, episode_num: int) -> Path:
 
 def extract_novel_title(html_content: str) -> str | None:
     """エピソードページのHTMLから小説タイトルを抽出"""
-    import html
-
     # <title>作品タイトル - エピソードタイトル</title> から取得
     match = re.search(r"<title>(.+?)</title>", html_content)
     if match:
@@ -101,13 +100,13 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
 
     # エピソードページを直接取得
     episode_url = f"https://ncode.syosetu.com/{novel_id}/{episode_num}/"
-    html = get(episode_url)
+    html_content = get(episode_url)
 
     # 小説タイトルを抽出
-    novel_title = extract_novel_title(html) or novel_id
+    novel_title = extract_novel_title(html_content) or novel_id
 
     parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
-    parser.feed(html)
+    parser.feed(html_content)
 
     episode_title = parser.title
     paragraphs = parser.paragraphs
@@ -231,10 +230,21 @@ def go():
 def go_id():
     """小説IDとエピソード番号からリダイレクト"""
     novel_id = request.args.get("novel_id", "").strip()
-    episode = request.args.get("episode", "1").strip()
+    episode_str = request.args.get("episode", "1").strip()
 
     if not novel_id:
         return redirect("/")
+
+    # バリデーション
+    if not re.match(r"^[a-zA-Z0-9]+$", novel_id) or len(novel_id) > 20:
+        return "無効な小説IDです", 400
+
+    try:
+        episode = int(episode_str)
+        if episode < 1 or episode > 10000:
+            raise ValueError
+    except ValueError:
+        return "エピソード番号は1〜10000の範囲で指定してください", 400
 
     return redirect(f"/read/{novel_id}/{episode}")
 
@@ -256,7 +266,7 @@ def read_episode(novel_id: str, episode: int):
             f"EPUB生成エラー: novel_id={novel_id}, episode={episode}, error={e}"
         )
         return "EPUB の生成に失敗しました。URLを確認してください。", 500
-    except Exception as e:
+    except Exception:
         logging.exception(f"予期しないエラー: novel_id={novel_id}, episode={episode}")
         return "EPUB の生成に失敗しました", 500
 
