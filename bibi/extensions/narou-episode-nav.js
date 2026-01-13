@@ -160,6 +160,36 @@ Bibi.x({
             });
         }
 
+        // 境界ページでのクリックによるエピソード遷移
+        // 各アイテム（iframe）のcontentDocumentにクリックイベントを追加
+        if (getEpisodeInfo() && R && R.Items) {
+            var handleEpisodeClick = function(e) {
+                var mainRect = R.Main.getBoundingClientRect();
+                var width = mainRect.width;
+                var flipperWidth = width * 0.25;
+
+                // iframe内でのクリック位置を親の座標系に変換
+                var iframe = e.target.ownerDocument.defaultView.frameElement;
+                var iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0 };
+                var clickXInParent = iframeRect.left + e.clientX;
+
+                // 左側クリック（縦書きでは次ページ方向）
+                if (clickXInParent < flipperWidth && isLastSpread()) {
+                    goToNextEpisode();
+                }
+                // 右側クリック（縦書きでは前ページ方向）
+                else if (clickXInParent > width - flipperWidth && isFirstSpread()) {
+                    goToPrevEpisode();
+                }
+            };
+
+            R.Items.forEach(function(item) {
+                if (item.contentDocument) {
+                    item.contentDocument.addEventListener('click', handleEpisodeClick, true);
+                }
+            });
+        }
+
         // 読書履歴を保存
         var episodeInfo = getEpisodeInfo();
         if (episodeInfo) {
