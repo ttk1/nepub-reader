@@ -12,6 +12,7 @@ from flask import Flask, redirect, render_template, request, send_from_directory
 from nepub.epub import container, content, nav, text
 from nepub.http import get
 from nepub.parser.narou import NarouEpisodeParser
+from werkzeug.security import safe_join
 
 
 def style() -> str:
@@ -285,8 +286,44 @@ def serve_bibi(filename: str):
 
 @app.route("/bibi-bookshelf/<path:filename>")
 def serve_bookshelf(filename: str):
-    """既存の bookshelf ファイルを配信"""
-    return send_from_directory(BOOKSHELF_DIR, filename)
+    """既存の bookshelf ファイルを配信
+
+    Bibi が suffix range (bytes=-N) でファイルサイズより大きな値を要求すると、
+    Flask/Werkzeug が 416 Range Not Satisfiable を返してしまう問題への対策を含む。
+    """
+    range_header = request.headers.get("Range", "")
+
+    # suffix range (bytes=-N) 以外は通常処理
+    if not range_header.startswith("bytes=-"):
+        return send_from_directory(BOOKSHELF_DIR, filename)
+
+    # Range ヘッダーのパース
+    try:
+        suffix_length = int(range_header[7:])
+    except ValueError:
+        return "Invalid Range header", 400
+
+    # パストラバーサル対策
+    safe_path = safe_join(str(BOOKSHELF_DIR), filename)
+    if not safe_path:
+        return "Invalid path", 400
+
+    # ファイル存在チェック
+    if not os.path.isfile(safe_path):
+        return "Not found", 404
+
+    # suffix_length がファイルサイズ未満なら通常の Range 処理で OK
+    file_size = os.path.getsize(safe_path)
+    if suffix_length < file_size:
+        return send_from_directory(BOOKSHELF_DIR, filename)
+
+    # suffix_length >= file_size の場合、Flask が 416 を返すのを回避
+    # ファイル全体を 206 Partial Content で返す
+    response = send_from_directory(BOOKSHELF_DIR, filename, conditional=False)
+    response.status_code = 206
+    response.headers["Content-Range"] = f"bytes 0-{file_size - 1}/{file_size}"
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
 
 
 def main():
