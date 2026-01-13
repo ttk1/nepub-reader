@@ -1,17 +1,16 @@
+import datetime
+import json
+import logging
 import os
 import re
 import tempfile
-import json
-import datetime
 import zipfile
-import email.utils
-import logging
 from pathlib import Path
-from flask import Flask, redirect, abort, send_from_directory, Response, request, render_template
 
-from nepub.parser.narou import NarouEpisodeParser
-from nepub.http import get
+from flask import Flask, redirect, render_template, request, send_from_directory
 from nepub.epub import container, content, nav, text
+from nepub.http import get
+from nepub.parser.narou import NarouEpisodeParser
 
 
 def style() -> str:
@@ -39,8 +38,7 @@ span.tcy {
 
 # ロギング設定
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # プロジェクトルート
@@ -85,8 +83,9 @@ def get_cache_path(novel_id: str, episode_num: int) -> Path:
 def extract_novel_title(html_content: str) -> str | None:
     """エピソードページのHTMLから小説タイトルを抽出"""
     import html
+
     # <title>作品タイトル - エピソードタイトル</title> から取得
-    match = re.search(r'<title>(.+?)</title>', html_content)
+    match = re.search(r"<title>(.+?)</title>", html_content)
     if match:
         return html.escape(match.group(1).strip())
     return None
@@ -119,18 +118,22 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
     episode_id = str(episode_num)
 
     # episodes リスト（1話分）
-    episodes = [{
-        "id": episode_id,
-        "title": episode_title,
-        "paragraphs": paragraphs,
-        "fetched": True,
-    }]
+    episodes = [
+        {
+            "id": episode_id,
+            "title": episode_title,
+            "paragraphs": paragraphs,
+            "fetched": True,
+        }
+    ]
 
     # chapters リスト（目次用）
-    chapters = [{
-        "name": "default",
-        "episodes": episodes,
-    }]
+    chapters = [
+        {
+            "name": "default",
+            "episodes": episodes,
+        }
+    ]
 
     # 画像の重複除去
     unique_images = []
@@ -138,11 +141,13 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
     for image in images:
         if image["id"] not in image_ids:
             image_ids.add(image["id"])
-            unique_images.append({
-                "id": image["id"],
-                "name": image["name"],
-                "type": image["type"],
-            })
+            unique_images.append(
+                {
+                    "id": image["id"],
+                    "name": image["name"],
+                    "type": image["type"],
+                }
+            )
 
     # metadata
     metadata = {
@@ -163,15 +168,16 @@ def generate_epub_direct(novel_id: str, episode_num: int) -> Path:
 
     # ZIP (EPUB) ファイルを作成
     with tempfile.NamedTemporaryFile(
-        prefix=f"{novel_id}_{episode_num}_", suffix=".epub",
-        dir=CACHE_DIR, delete=False
+        prefix=f"{novel_id}_{episode_num}_", suffix=".epub", dir=CACHE_DIR, delete=False
     ) as tmp_file:
         tmp_file_name = tmp_file.name
         with zipfile.ZipFile(
             tmp_file, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
         ) as zf:
             # EPUB仕様: mimetype は最初に無圧縮で追加する必要がある
-            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            zf.writestr(
+                "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
+            )
 
             # EPUB 構造ファイル
             zf.writestr("META-INF/container.xml", container())
@@ -237,7 +243,7 @@ def go_id():
 def read_episode(novel_id: str, episode: int):
     """特定のエピソードを Bibi で表示（1話単位）- 目次を読み込まずに直接取得"""
     # 入力バリデーション
-    if not re.match(r'^[a-zA-Z0-9]+$', novel_id) or len(novel_id) > 20:
+    if not re.match(r"^[a-zA-Z0-9]+$", novel_id) or len(novel_id) > 20:
         return "無効な小説IDです", 400
     if episode < 1 or episode > 10000:
         return "エピソード番号は1〜10000の範囲で指定してください", 400
@@ -246,7 +252,9 @@ def read_episode(novel_id: str, episode: int):
     try:
         generate_epub_direct(novel_id, episode)
     except (IOError, ValueError) as e:
-        logging.error(f"EPUB生成エラー: novel_id={novel_id}, episode={episode}, error={e}")
+        logging.error(
+            f"EPUB生成エラー: novel_id={novel_id}, episode={episode}, error={e}"
+        )
         return "EPUB の生成に失敗しました。URLを確認してください。", 500
     except Exception as e:
         logging.exception(f"予期しないエラー: novel_id={novel_id}, episode={episode}")
@@ -267,87 +275,14 @@ def serve_bibi(filename: str):
 
 @app.route("/bibi-bookshelf/<path:filename>")
 def serve_bookshelf(filename: str):
-    """既存の bookshelf ファイルを配信（Range リクエスト対応）"""
-    file_path = (BOOKSHELF_DIR / filename).resolve()
-
-    # パストラバーサル対策: BOOKSHELF_DIR 配下であることを確認
-    if not file_path.is_relative_to(BOOKSHELF_DIR.resolve()):
-        abort(403)
-
-    if not file_path.exists():
-        abort(404)
-
-    # MIME タイプを決定
-    if filename.endswith('.epub'):
-        mimetype = 'application/epub+zip'
-    elif filename.endswith('.zip'):
-        mimetype = 'application/zip'
-    else:
-        mimetype = 'application/octet-stream'
-
-    file_size = file_path.stat().st_size
-
-    # Range リクエストの処理
-    range_header = request.headers.get('Range')
-    if range_header:
-        # Range: bytes=0-1023 または bytes=-1024 (suffix) の形式をパース
-        try:
-            byte_range = range_header.replace('bytes=', '').split('-')
-
-            if byte_range[0] == '':
-                # suffix range: bytes=-N (末尾からNバイト)
-                suffix_length = int(byte_range[1])
-                if suffix_length <= 0:
-                    abort(416)
-                start = max(0, file_size - suffix_length)
-                end = file_size - 1
-            else:
-                start = int(byte_range[0])
-                end = int(byte_range[1]) if byte_range[1] else file_size - 1
-
-            # バリデーション
-            if start < 0 or end < 0 or start > end or start >= file_size:
-                abort(416)  # Range Not Satisfiable
-
-            end = min(end, file_size - 1)
-            length = end - start + 1
-
-        except (ValueError, IndexError):
-            abort(416)  # Range Not Satisfiable
-
-        with open(file_path, 'rb') as f:
-            f.seek(start)
-            data = f.read(length)
-
-        response = Response(
-            data,
-            status=206,  # Partial Content
-            mimetype=mimetype
-        )
-        response.headers['Content-Range'] = f'bytes {start}-{end}/{file_size}'
-        response.headers['Accept-Ranges'] = 'bytes'
-        response.headers['Content-Length'] = length
-        return response
-
-    # 通常のリクエスト - ファイル全体を返す
-    mtime = file_path.stat().st_mtime
-    last_modified = email.utils.formatdate(mtime, usegmt=True)
-
-    with open(file_path, 'rb') as f:
-        data = f.read()
-
-    response = Response(data, mimetype=mimetype)
-    response.headers['Accept-Ranges'] = 'bytes'
-    response.headers['Content-Length'] = file_size
-    response.headers['Last-Modified'] = last_modified
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    return response
+    """既存の bookshelf ファイルを配信"""
+    return send_from_directory(BOOKSHELF_DIR, filename)
 
 
 def main():
     """サーバーを起動"""
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
     print("nepub-reader を起動中...")
     print(f"http://localhost:{port}/ でアクセスできます")
     app.run(host="0.0.0.0", port=port, debug=debug)
