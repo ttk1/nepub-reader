@@ -1,7 +1,7 @@
 [project]
 name = "nepub-reader"
 version = "0.1.0"
-description = "小説家になろうの作品を縦書き表示で快適に読めるビューアー"
+description = "小説家になろうの作品を縦書き表示で快適に読めるリーダー"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
