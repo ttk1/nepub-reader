@@ -11,7 +11,31 @@ from flask import Flask, redirect, abort, send_from_directory, Response, request
 
 from nepub.parser.narou import NarouEpisodeParser
 from nepub.http import get
-from nepub.epub import container, content, nav, style, text
+from nepub.epub import container, content, nav, text
+
+
+def style() -> str:
+    """カスタムスタイルシート（行間を調整）"""
+    return """body {
+	writing-mode: vertical-rl;
+	-webkit-writing-mode: vertical-rl;
+	-epub-writing-mode: vertical-rl;
+	line-height: 1.7;
+}
+
+p {
+	margin: 0;
+	padding: 0;
+}
+
+span.tcy {
+	writing-mode: horizontal-tb;
+	-webkit-writing-mode: horizontal-tb;
+	-epub-writing-mode: horizontal-tb;
+	line-height: 1;
+}
+"""
+
 
 # ロギング設定
 logging.basicConfig(
