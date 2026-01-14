@@ -157,8 +157,8 @@ wheels = [
 
 [[package]]
 name = "nepub"
-version = "1.4.1"
-source = { git = "https://github.com/ttk1/nepub.git#ca62fd66028ae8a4dfd6127f4435187437df96eb" }
+version = "1.5.0"
+source = { git = "https://github.com/ttk1/nepub.git#72dc192c7c316e58a4485661dd664da76e292dab" }
 dependencies = [
     { name = "jinja2" },
 ]
