@@ -30,6 +30,22 @@ uv run nepub-reader
 
 ブラウザで http://localhost:5000/ にアクセスしてください。
 
+### Docker で起動
+
+```bash
+# ビルド
+docker build -t nepub-reader .
+
+# 実行
+docker run -p 5000:5000 nepub-reader
+```
+
+キャッシュを永続化したい場合はボリュームをマウントしてください：
+
+```bash
+docker run -p 5000:5000 -v nepub-cache:/app/bibi-bookshelf/narou nepub-reader
+```
+
 ## 使い方
 
 ### 小説 ID で開く

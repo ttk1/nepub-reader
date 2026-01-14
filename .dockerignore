@@ -1,0 +1,10 @@
+.git
+.gitignore
+.venv
+.claude
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+bibi-bookshelf/narou/*.epub
+LICENSE
