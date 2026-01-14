@@ -24,6 +24,12 @@ def style() -> str:
 	line-height: 1.7;
 }
 
+h1 {
+	text-align: center;
+	margin-top: 2em;
+	margin-bottom: 2em;
+}
+
 p {
 	margin: 0;
 	padding: 0;
