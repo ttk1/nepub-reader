@@ -82,8 +82,49 @@ Bibi.x({
         }
     }
 
+    // ホイールスクロールによるエピソード遷移用の状態
+    var wheelAccumulator = 0;
+    var wheelThreshold = 100;
+    var wheelResetTimer = null;
+
+    // ホイールイベントハンドラ
+    function handleWheel(e) {
+        if (!getEpisodeInfo()) return;
+
+        var delta = e.deltaX || e.deltaY;
+        var atFirst = isFirstSpread();
+        var atLast = isLastSpread();
+
+        // 境界ページでない場合はリセット
+        if (!atFirst && !atLast) {
+            wheelAccumulator = 0;
+            return;
+        }
+
+        // 境界ページで、進行方向へのスクロールのみ蓄積
+        if ((atFirst && delta < 0) || (atLast && delta > 0)) {
+            clearTimeout(wheelResetTimer);
+            wheelAccumulator += Math.abs(delta);
+            wheelResetTimer = setTimeout(function() { wheelAccumulator = 0; }, 800);
+
+            if (wheelAccumulator > wheelThreshold) {
+                wheelAccumulator = 0;
+                if (atFirst) {
+                    goToPrevEpisode();
+                } else {
+                    goToNextEpisode();
+                }
+            }
+        } else {
+            wheelAccumulator = 0;
+        }
+    }
+
     // メインドキュメントにキーイベントを登録
     document.addEventListener('keydown', handleKeyDown, true);
+
+    // メインドキュメントにホイールイベントを登録
+    document.addEventListener('wheel', handleWheel, { passive: true });
 
     // 文字サイズ変更時に Biscuits に保存（リロード時も設定が維持される）
     E.bind('bibi:changed-font-size', function() {
@@ -151,11 +192,12 @@ Bibi.x({
             setTimeout(navigateToFoot, 100);
         }
 
-        // 各アイテムの contentDocument にキーイベントを登録
+        // 各アイテムの contentDocument にキーイベントとホイールイベントを登録
         if (R && R.Items) {
             R.Items.forEach(function(item) {
                 if (item.contentDocument) {
                     item.contentDocument.addEventListener('keydown', handleKeyDown, true);
+                    item.contentDocument.addEventListener('wheel', handleWheel, { passive: true });
                 }
             });
         }
