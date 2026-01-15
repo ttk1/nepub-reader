@@ -82,41 +82,19 @@ Bibi.x({
         }
     }
 
-    // ホイールスクロールによるエピソード遷移用の状態
-    var wheelAccumulator = 0;
-    var wheelThreshold = 100;
-    var wheelResetTimer = null;
-
     // ホイールイベントハンドラ
     function handleWheel(e) {
         if (!getEpisodeInfo()) return;
 
         var delta = e.deltaX || e.deltaY;
-        var atFirst = isFirstSpread();
-        var atLast = isLastSpread();
 
-        // 境界ページでない場合はリセット
-        if (!atFirst && !atLast) {
-            wheelAccumulator = 0;
-            return;
+        // 最初のページで上スクロール → 前のエピソードへ
+        if (isFirstSpread() && delta < 0) {
+            goToPrevEpisode();
         }
-
-        // 境界ページで、進行方向へのスクロールのみ蓄積
-        if ((atFirst && delta < 0) || (atLast && delta > 0)) {
-            clearTimeout(wheelResetTimer);
-            wheelAccumulator += Math.abs(delta);
-            wheelResetTimer = setTimeout(function() { wheelAccumulator = 0; }, 800);
-
-            if (wheelAccumulator > wheelThreshold) {
-                wheelAccumulator = 0;
-                if (atFirst) {
-                    goToPrevEpisode();
-                } else {
-                    goToNextEpisode();
-                }
-            }
-        } else {
-            wheelAccumulator = 0;
+        // 最後のページで下スクロール → 次のエピソードへ
+        else if (isLastSpread() && delta > 0) {
+            goToNextEpisode();
         }
     }
 
