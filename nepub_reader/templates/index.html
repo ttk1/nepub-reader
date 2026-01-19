@@ -16,6 +16,7 @@
             --button-bg: #0066cc;
             --button-hover: #0055aa;
             --input-bg: #ffffff;
+            --danger-color: #cc3333;
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -29,6 +30,7 @@
                 --button-bg: #4a90d9;
                 --button-hover: #3a7bc8;
                 --input-bg: #2a2a2a;
+                --danger-color: #ff6666;
             }
         }
         body {
@@ -105,29 +107,19 @@
         .history-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             padding: 10px 0;
             border-bottom: 1px solid var(--border-color);
+            gap: 10px;
         }
         .history-item:last-child {
             border-bottom: none;
-        }
-        .history-item a {
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .history-item a:hover {
-            text-decoration: underline;
         }
         .history-meta {
             font-size: 0.85em;
             color: var(--text-secondary);
             white-space: nowrap;
             flex-shrink: 0;
-        }
-        .history-empty {
-            color: var(--text-secondary);
-            font-style: italic;
         }
         .history-clear {
             background: transparent;
@@ -148,6 +140,34 @@
         }
         .history-header h3 {
             margin: 0;
+        }
+        .history-delete {
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            padding: 2px 8px;
+            border: none;
+            cursor: pointer;
+            opacity: 0.6;
+            margin-left: 10px;
+            flex-shrink: 0;
+        }
+        .history-delete:hover {
+            opacity: 1;
+            color: var(--danger-color);
+        }
+        .history-item-content {
+            display: flex;
+            align-items: flex-start;
+            flex: 1;
+        }
+        .history-item-content a {
+            text-decoration: none;
+            font-weight: 500;
+            word-break: break-word;
+        }
+        .history-item-content a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -198,6 +218,15 @@
         (function() {
             var STORAGE_KEY = 'nepub_reading_history';
 
+            function getHistory() {
+                try {
+                    var stored = localStorage.getItem(STORAGE_KEY);
+                    return stored ? JSON.parse(stored) : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
             function formatDate(isoString) {
                 var date = new Date(isoString);
                 var now = new Date();
@@ -215,13 +244,7 @@
             function loadHistory() {
                 var section = document.getElementById('history-section');
                 var list = document.getElementById('history-list');
-                var history = [];
-                try {
-                    var stored = localStorage.getItem(STORAGE_KEY);
-                    if (stored) history = JSON.parse(stored);
-                } catch (e) {
-                    history = [];
-                }
+                var history = getHistory();
                 if (history.length === 0) {
                     section.style.display = 'none';
                     return;
@@ -231,17 +254,39 @@
                 history.forEach(function(item) {
                     var li = document.createElement('li');
                     li.className = 'history-item';
+                    var contentDiv = document.createElement('div');
+                    contentDiv.className = 'history-item-content';
                     var link = document.createElement('a');
                     link.href = '/read/' + item.novel_id + '/' + item.last_episode;
                     var title = item.novel_title || (item.novel_id + ' - ' + item.last_episode + '話');
                     link.textContent = title;
+                    var deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'history-delete';
+                    deleteBtn.textContent = '×';
+                    deleteBtn.title = 'この履歴を削除';
+                    deleteBtn.onclick = (function(novelId) {
+                        return function(e) {
+                            e.preventDefault();
+                            deleteHistoryItem(novelId);
+                        };
+                    })(item.novel_id);
+                    contentDiv.appendChild(link);
+                    contentDiv.appendChild(deleteBtn);
                     var meta = document.createElement('span');
                     meta.className = 'history-meta';
                     meta.textContent = formatDate(item.last_accessed);
-                    li.appendChild(link);
+                    li.appendChild(contentDiv);
                     li.appendChild(meta);
                     list.appendChild(li);
                 });
+            }
+
+            function deleteHistoryItem(novelId) {
+                var history = getHistory().filter(function(item) {
+                    return item.novel_id !== novelId;
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+                loadHistory();
             }
 
             window.clearHistory = function() {
