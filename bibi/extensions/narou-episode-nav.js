@@ -14,7 +14,7 @@ Bibi.x({
     description: "Navigate between episodes of Narou novels.",
     author: "Custom",
     version: "1.0.0"
-})(function() {
+})(function () {
 
     // ページめくりのデバウンス用（リモコンのチャタリング対策）
     var lastKeyTime = 0;
@@ -124,7 +124,7 @@ Bibi.x({
     document.addEventListener('wheel', handleWheel, { passive: true });
 
     // 文字サイズ変更時に Biscuits に保存（リロード時も設定が維持される）
-    E.bind('bibi:changed-font-size', function() {
+    E.bind('bibi:changed-font-size', function () {
         if (O.Biscuits && I.FontSizeChanger) {
             O.Biscuits.memorize('Bibi', { FontSize: { Step: I.FontSizeChanger.Step || 0 } });
         }
@@ -143,7 +143,7 @@ Bibi.x({
             history = [];
         }
         // 既存のエントリを探す
-        var existingIndex = history.findIndex(function(item) {
+        var existingIndex = history.findIndex(function (item) {
             return item.novel_id === info.novel;
         });
         var entry = {
@@ -183,7 +183,7 @@ Bibi.x({
     }
 
     // 本の読み込み完了後の処理
-    E.bind('bibi:opened', function() {
+    E.bind('bibi:opened', function () {
         // edge=foot が指定されている場合、末尾へ移動
         if (window.location.hash.indexOf('edge=foot') !== -1) {
             setTimeout(navigateToFoot, 100);
@@ -191,7 +191,7 @@ Bibi.x({
 
         // 各アイテムの contentDocument にキーイベントとホイールイベントを登録
         if (R && R.Items) {
-            R.Items.forEach(function(item) {
+            R.Items.forEach(function (item) {
                 if (item.contentDocument) {
                     // デバウンスハンドラを先に登録（チャタリング対策）
                     item.contentDocument.addEventListener('keydown', debounceKeyHandler, true);
@@ -204,7 +204,7 @@ Bibi.x({
         // 境界ページでのクリックによるエピソード遷移
         // 各アイテム（iframe）のcontentDocumentにクリックイベントを追加
         if (getEpisodeInfo() && R && R.Items) {
-            var handleEpisodeClick = function(e) {
+            var handleEpisodeClick = function (e) {
                 var mainRect = R.Main.getBoundingClientRect();
                 var width = mainRect.width;
                 var flipperWidth = width * 0.25;
@@ -224,7 +224,7 @@ Bibi.x({
                 }
             };
 
-            R.Items.forEach(function(item) {
+            R.Items.forEach(function (item) {
                 if (item.contentDocument) {
                     item.contentDocument.addEventListener('click', handleEpisodeClick, true);
                 }
@@ -237,5 +237,30 @@ Bibi.x({
             var novelTitle = getNovelTitle();
             saveReadingHistory(episodeInfo, novelTitle);
         }
+
+        // メニューバーにトップページへ戻るボタンを追加
+        addHomeButton();
     });
+
+    // トップページへ戻るボタンを追加
+    function addHomeButton() {
+        var menuL = document.getElementById('bibi-menu-l');
+        if (!menuL || document.getElementById('bibi-buttongroup-home')) return;
+
+        var style = document.createElement('style');
+        style.textContent = '\
+            #bibi-buttongroup-home .bibi-icon-home { display: flex; align-items: center; justify-content: center; padding: 4px; height: 31px; box-sizing: border-box; }\
+            #bibi-buttongroup-home .bibi-icon-home svg { display: block; }\
+            #bibi-buttongroup-home .bibi-button:hover .bibi-icon-home, \
+            #bibi-buttongroup-home .bibi-button.hover .bibi-icon-home { border-color: #c0c0c1; background-color: #f7f8fa; }\
+            #bibi-buttongroup-home .bibi-button:hover .bibi-icon-home svg path, \
+            #bibi-buttongroup-home .bibi-button.hover .bibi-icon-home svg path { fill: #404040; }';
+        document.head.appendChild(style);
+
+        var html = '<ul id="bibi-buttongroup-home" class="bibi-buttongroup"><li class="bibi-buttonbox">' +
+            '<a href="/" class="bibi-button bibi-button-home" title="トップページへ戻る"><span class="bibi-button-iconbox"><span class="bibi-icon bibi-icon-home">' +
+            '<svg viewBox="0 0 24 24" width="23" height="23"><path fill="#909091" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>' +
+            '</span></span></a></li></ul>';
+        menuL.insertAdjacentHTML('afterbegin', html);
+    }
 });
