@@ -16,6 +16,25 @@ Bibi.x({
     version: "1.0.0"
 })(function() {
 
+    // ページめくりのデバウンス用（リモコンのチャタリング対策）
+    var lastKeyTime = 0;
+    var KEY_DEBOUNCE_MS = 100; // 100ms以内の連続キー入力を無視
+
+    function debounceKeyHandler(e) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            var now = Date.now();
+            if (now - lastKeyTime < KEY_DEBOUNCE_MS) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                return;
+            }
+            lastKeyTime = now;
+        }
+    }
+
+    // メインドキュメントにデバウンスハンドラを登録（キャプチャフェーズで先に処理）
+    document.addEventListener('keydown', debounceKeyHandler, true);
+
     // URL パラメータの book からファイル名をパースして小説IDとエピソード番号を取得
     // book=narou/{novel_id}_{episode}.epub 形式を想定
     function getEpisodeInfo() {
@@ -174,6 +193,8 @@ Bibi.x({
         if (R && R.Items) {
             R.Items.forEach(function(item) {
                 if (item.contentDocument) {
+                    // デバウンスハンドラを先に登録（チャタリング対策）
+                    item.contentDocument.addEventListener('keydown', debounceKeyHandler, true);
                     item.contentDocument.addEventListener('keydown', handleKeyDown, true);
                     item.contentDocument.addEventListener('wheel', handleWheel, { passive: true });
                 }
