@@ -1,19 +1,22 @@
 /*!
- *  Narou Episode Navigation Extension for Bibi
+ *  Episode Navigation Extension for Bibi
+ *  - Supports both Narou and Kakuyomu novels
  *  - Automatically navigates to the next/previous episode at book boundaries
+ *  - For Kakuyomu, reads prev/next episode IDs from URL query parameters
  *  - Persists font size settings across episodes using Bibi's Biscuits
  *
  *  Bibi グローバル変数:
  *  - R: Reader（現在の表示状態、ページ情報など）
+ *  - B: Book（EPUBのメタデータ、パッケージ情報など）
  *  - E: Events（イベントバインディング）
  *  - O: Options（設定、Biscuits=クッキー管理など）
  *  - I: Interactions（UIコンポーネント、FontSizeChangerなど）
  */
 Bibi.x({
-    id: "NarouEpisodeNavigation",
-    description: "Navigate between episodes of Narou novels.",
+    id: "EpisodeNavigation",
+    description: "Navigate between episodes of Narou/Kakuyomu novels.",
     author: "Custom",
-    version: "1.0.0"
+    version: "2.0.0"
 })(function () {
 
     // ページめくりのデバウンス用（リモコンのチャタリング対策）
@@ -35,28 +38,114 @@ Bibi.x({
     // メインドキュメントにデバウンスハンドラを登録（キャプチャフェーズで先に処理）
     document.addEventListener('keydown', debounceKeyHandler, true);
 
-    // URL パラメータの book からファイル名をパースして小説IDとエピソード番号を取得
-    // book=narou/{novel_id}_{episode}.epub 形式を想定
+    // URL パラメータの book からサイト種別・小説ID・エピソードIDを取得
+    // book=narou/{novel_id}_{episode}.epub または book=kakuyomu/{work_id}_{episode_id}.epub
     function getEpisodeInfo() {
         var params = new URLSearchParams(window.location.search);
         var book = params.get('book');
         if (!book) return null;
-        // narou/{novel_id}_{episode}.epub からファイル名部分を抽出
-        var filename = book.split('/').pop();
-        if (!filename) return null;
-        // {novel_id}_{episode}.epub をパース
-        var match = filename.match(/^(.+)_(\d+)\.epub$/);
-        if (!match) return null;
-        return { novel: match[1], episode: parseInt(match[2], 10) };
+
+        var parts = book.split('/');
+        if (parts.length !== 2) return null;
+
+        var site = parts[0];
+        var filename = parts[1];
+
+        var match;
+        if (site === 'narou') {
+            match = filename.match(/^(.+)_(\d+)\.epub$/);
+            if (!match) return null;
+            return { site: 'narou', novel: match[1], episode: parseInt(match[2], 10) };
+        } else if (site === 'kakuyomu') {
+            match = filename.match(/^(\d+)_(\d+)\.epub$/);
+            if (!match) return null;
+            return { site: 'kakuyomu', novel: match[1], episode: match[2] };
+        }
+        return null;
     }
 
-    // 指定方向のエピソードURLを生成
+    // なろう: 指定方向のエピソードURLを生成
+    function getNarouEpisodeUrl(info, direction) {
+        var newEpisode = info.episode + direction;
+        if (newEpisode < 1) return null;
+        return '/read/narou/' + info.novel + '/' + newEpisode;
+    }
+
+    // カクヨム: 前後のエピソードIDをURLクエリパラメータから取得
+    // サーバー側でリダイレクト時に ?book=...&prev=...&next=... として渡される
+    var _kakuyomuNav = (function () {
+        var params = new URLSearchParams(window.location.search);
+        var book = params.get('book');
+        if (!book || book.indexOf('kakuyomu/') !== 0) return null;
+        return { prev: params.get('prev') || null, next: params.get('next') || null };
+    })();
+
+    function getKakuyomuEpisodeUrl(info, direction) {
+        if (!_kakuyomuNav) return null;
+        var targetId = direction > 0 ? _kakuyomuNav.next : _kakuyomuNav.prev;
+        if (!targetId) return null;
+        return '/read/kakuyomu/' + info.novel + '/' + targetId;
+    }
+
+    // 統合: エピソードURLを取得
     function getEpisodeUrl(direction) {
         var info = getEpisodeInfo();
         if (!info) return null;
-        var newEpisode = info.episode + direction;
-        if (newEpisode < 1) return null;
-        return '/read/' + info.novel + '/' + newEpisode;
+        if (info.site === 'narou') {
+            return getNarouEpisodeUrl(info, direction);
+        } else if (info.site === 'kakuyomu') {
+            return getKakuyomuEpisodeUrl(info, direction);
+        }
+        return null;
+    }
+
+    // カクヨム: 最新話チェック（sessionStorage でキャッシュ）
+    var _checkingNextEpisode = false;
+
+    function checkKakuyomuNextEpisode(info, callback) {
+        var cacheKey = 'kakuyomu_no_next_' + info.novel + '_' + info.episode;
+
+        // sessionStorage にキャッシュがあれば問い合わせをスキップ
+        try {
+            if (sessionStorage.getItem(cacheKey)) {
+                callback(null);
+                return;
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        if (_checkingNextEpisode) return;
+        _checkingNextEpisode = true;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/kakuyomu/next-episode/' + info.novel + '/' + info.episode);
+        xhr.onload = function () {
+            _checkingNextEpisode = false;
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (data.next_episode_id) {
+                    // 次話が見つかった → ナビゲーション情報を更新
+                    _kakuyomuNav.next = data.next_episode_id;
+                    callback(data.next_episode_id);
+                } else {
+                    // 次話なし → sessionStorage にキャッシュ
+                    try {
+                        sessionStorage.setItem(cacheKey, '1');
+                    } catch (e) {
+                        // ignore
+                    }
+                    callback(null);
+                }
+            } catch (e) {
+                callback(null);
+            }
+        };
+        xhr.onerror = function () {
+            _checkingNextEpisode = false;
+            callback(null);
+        };
+        xhr.send();
     }
 
     // 最後のスプレッド（見開き）かどうかを判定
@@ -81,8 +170,23 @@ Bibi.x({
 
     // 次のエピソードへ移動
     function goToNextEpisode() {
+        var info = getEpisodeInfo();
+        if (!info) return;
+
         var url = getEpisodeUrl(1);
-        if (url) window.location.href = url;
+        if (url) {
+            window.location.href = url;
+            return;
+        }
+
+        // カクヨムで next が null の場合、APIで最新話チェック
+        if (info.site === 'kakuyomu' && _kakuyomuNav && !_kakuyomuNav.next) {
+            checkKakuyomuNextEpisode(info, function (nextId) {
+                if (nextId) {
+                    window.location.href = '/read/kakuyomu/' + info.novel + '/' + nextId;
+                }
+            });
+        }
     }
 
     // 前のエピソードの末尾へ移動
@@ -142,22 +246,24 @@ Bibi.x({
         } catch (e) {
             history = [];
         }
-        // 既存のエントリを探す
+        // 履歴キー: サイト + 小説ID
+        var historyKey = (info.site || 'narou') + ':' + info.novel;
         var existingIndex = history.findIndex(function (item) {
-            return item.novel_id === info.novel;
+            // 後方互換: site がない場合は narou として扱う
+            var itemKey = (item.site || 'narou') + ':' + item.novel_id;
+            return itemKey === historyKey;
         });
         var entry = {
+            site: info.site || 'narou',
             novel_id: info.novel,
             novel_title: novelTitle || info.novel,
             last_episode: info.episode,
             last_accessed: new Date().toISOString()
         };
         if (existingIndex !== -1) {
-            // 既存エントリを更新して先頭に移動
             history.splice(existingIndex, 1);
         }
         history.unshift(entry);
-        // 最大件数を超えたら古いものを削除
         if (history.length > MAX_HISTORY) {
             history = history.slice(0, MAX_HISTORY);
         }
@@ -171,7 +277,6 @@ Bibi.x({
     // EPUBのメタデータから小説タイトルを取得
     function getNovelTitle() {
         try {
-            // B.Package.Metadata から title を取得
             if (B && B.Package && B.Package.Metadata && B.Package.Metadata.title) {
                 var title = B.Package.Metadata.title[0];
                 if (title) return title;
@@ -184,6 +289,8 @@ Bibi.x({
 
     // 本の読み込み完了後の処理
     E.bind('bibi:opened', function () {
+        var info = getEpisodeInfo();
+
         // edge=foot が指定されている場合、末尾へ移動
         if (window.location.hash.indexOf('edge=foot') !== -1) {
             setTimeout(navigateToFoot, 100);
@@ -202,14 +309,12 @@ Bibi.x({
         }
 
         // 境界ページでのクリックによるエピソード遷移
-        // 各アイテム（iframe）のcontentDocumentにクリックイベントを追加
-        if (getEpisodeInfo() && R && R.Items) {
+        if (info && R && R.Items) {
             var handleEpisodeClick = function (e) {
                 var mainRect = R.Main.getBoundingClientRect();
                 var width = mainRect.width;
                 var flipperWidth = width * 0.25;
 
-                // iframe内でのクリック位置を親の座標系に変換
                 var iframe = e.target.ownerDocument.defaultView.frameElement;
                 var iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0 };
                 var clickXInParent = iframeRect.left + e.clientX;
@@ -232,10 +337,9 @@ Bibi.x({
         }
 
         // 読書履歴を保存
-        var episodeInfo = getEpisodeInfo();
-        if (episodeInfo) {
+        if (info) {
             var novelTitle = getNovelTitle();
-            saveReadingHistory(episodeInfo, novelTitle);
+            saveReadingHistory(info, novelTitle);
         }
 
         // メニューバーにトップページへ戻るボタンを追加

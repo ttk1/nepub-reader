@@ -50,7 +50,7 @@
             font-size: 0.9em;
         }
         a { color: var(--link-color); }
-        input[type="text"], input[type="number"] {
+        input[type="text"] {
             padding: 8px 12px;
             font-size: 16px;
             border: 1px solid var(--border-color);
@@ -62,12 +62,7 @@
             flex: 1;
             min-width: 300px;
         }
-        input[type="text"].id-input {
-            width: 120px;
-        }
-        input[type="number"] {
-            width: 80px;
-        }
+
         button {
             padding: 8px 16px;
             font-size: 16px;
@@ -173,29 +168,20 @@
 </head>
 <body>
     <h1>nepub-reader</h1>
-    <p>小説家になろうの作品を縦書き表示で快適に読めるリーダーです。</p>
+    <p>小説家になろう・カクヨムの作品を縦書き表示で快適に読めるリーダーです。</p>
 
     <div class="form-group">
-        <h3>小説IDで開く</h3>
-        <form action="/go-id" method="get">
-            <div class="form-row">
-                <input type="text" name="novel_id" class="id-input" placeholder="小説ID" required>
-                <input type="number" name="episode" value="1" min="1" max="10000" required>
-                <span>話から</span>
-                <button type="submit">読む</button>
-            </div>
-        </form>
-    </div>
-
-    <div class="form-group">
-        <h3>URLで開く</h3>
+        <h3>エピソードを開く</h3>
         <form action="/go" method="get">
             <div class="form-row">
                 <input type="text" name="url" class="url-input" placeholder="https://ncode.syosetu.com/nXXXXXX/1/" required>
                 <button type="submit">読む</button>
             </div>
         </form>
-        <p class="hint">エピソードURLを入力するとその話から、小説トップURLを入力すると1話から読めます。</p>
+        <p class="hint">
+            <b>小説家になろう</b>: エピソードURLまたは小説トップURL（1話から開始）<br>
+            <b>カクヨム</b>: エピソードURLを入力してください
+        </p>
     </div>
 
     <div class="form-group" id="history-section" style="display: none;">
@@ -257,19 +243,21 @@
                     var contentDiv = document.createElement('div');
                     contentDiv.className = 'history-item-content';
                     var link = document.createElement('a');
-                    link.href = '/read/' + item.novel_id + '/' + item.last_episode;
+                    var site = item.site || 'narou';
+                    link.href = '/read/' + site + '/' + item.novel_id + '/' + item.last_episode;
                     var title = item.novel_title || (item.novel_id + ' - ' + item.last_episode + '話');
                     link.textContent = title;
                     var deleteBtn = document.createElement('button');
                     deleteBtn.className = 'history-delete';
                     deleteBtn.textContent = '×';
                     deleteBtn.title = 'この履歴を削除';
-                    deleteBtn.onclick = (function(novelId) {
+                    var historyKey = site + ':' + item.novel_id;
+                    deleteBtn.onclick = (function(key) {
                         return function(e) {
                             e.preventDefault();
-                            deleteHistoryItem(novelId);
+                            deleteHistoryItem(key);
                         };
-                    })(item.novel_id);
+                    })(historyKey);
                     contentDiv.appendChild(link);
                     contentDiv.appendChild(deleteBtn);
                     var meta = document.createElement('span');
@@ -281,9 +269,10 @@
                 });
             }
 
-            function deleteHistoryItem(novelId) {
+            function deleteHistoryItem(key) {
                 var history = getHistory().filter(function(item) {
-                    return item.novel_id !== novelId;
+                    var itemKey = (item.site || 'narou') + ':' + item.novel_id;
+                    return itemKey !== key;
                 });
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
                 loadHistory();
