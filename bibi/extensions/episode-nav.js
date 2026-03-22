@@ -296,7 +296,7 @@ Bibi.x({
             setTimeout(navigateToFoot, 100);
         }
 
-        // 各アイテムの contentDocument にキーイベントとホイールイベントを登録
+        // 各アイテムの contentDocument にイベントとスタイルを設定
         if (R && R.Items) {
             R.Items.forEach(function (item) {
                 if (item.contentDocument) {
@@ -304,6 +304,8 @@ Bibi.x({
                     item.contentDocument.addEventListener('keydown', debounceKeyHandler, true);
                     item.contentDocument.addEventListener('keydown', handleKeyDown, true);
                     item.contentDocument.addEventListener('wheel', handleWheel, { passive: true });
+                    // ルビが右端で見切れないよう余白を確保
+                    item.contentDocument.documentElement.style.paddingRight = '0.25em';
                 }
             });
         }
