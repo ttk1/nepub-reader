@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+# ログを即時出力する（docker logs で確認できるように）
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # git をインストール（nepub が git リポジトリから取得されるため必要）
@@ -20,7 +23,7 @@ RUN uv sync --frozen --no-dev
 COPY bibi/ ./bibi/
 
 # bibi-bookshelf ディレクトリを作成（キャッシュ用）
-RUN mkdir -p bibi-bookshelf/narou
+RUN mkdir -p bibi-bookshelf/narou bibi-bookshelf/kakuyomu
 
 # 非 root ユーザーを作成して切り替え
 RUN useradd --create-home appuser && \

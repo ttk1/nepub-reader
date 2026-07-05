@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import tempfile
+import urllib.error
 import zipfile
 from pathlib import Path
 
@@ -75,13 +76,6 @@ KAKUYOMU_URL_PATTERN = re.compile(
     r"https?://kakuyomu\.jp/works/(\d+)(?:/episodes/(\d+))?/?"
 )
 
-# カクヨムエピソードページから前後エピソードIDを抽出する正規表現
-KAKUYOMU_PREV_EPISODE_PATTERN = re.compile(
-    r'id="contentMain-readPreviousEpisode"\s+href="/works/\d+/episodes/(\d+)'
-)
-KAKUYOMU_NEXT_EPISODE_PATTERN = re.compile(
-    r'href="/works/\d+/episodes/(\d+)"\s+id="contentMain-readNextEpisode"'
-)
 
 
 def parse_narou_url(url: str) -> tuple[str | None, int | None]:
@@ -107,20 +101,34 @@ def parse_kakuyomu_url(url: str) -> tuple[str | None, str | None]:
 def extract_novel_title(html_content: str) -> str | None:
     """エピソードページのHTMLから小説タイトルを抽出"""
     # <title>作品タイトル - エピソードタイトル</title> から取得
-    match = re.search(r"<title>(.+?)</title>", html_content)
+    match = re.search(r"<title>(.+?)</title>", html_content, re.DOTALL)
     if match:
-        return html.escape(match.group(1).strip())
+        # 生HTMLには実体参照 (&amp; 等) が残っているため、一度戻してから
+        # EPUB 用にエスケープし直す（二重エスケープ防止）
+        return html.escape(html.unescape(match.group(1).strip()))
     return None
+
+
+def _extract_adjacent_episode_id(html_content: str, link_id: str) -> str | None:
+    """カクヨムのエピソードHTMLから指定リンク要素のエピソードIDを抽出
+
+    id と href の属性の記述順や間に挟まる属性は保証されないため、
+    両方の順序を許容する。
+    """
+    match = re.search(
+        rf'id="{link_id}"[^>]*href="/works/\d+/episodes/(\d+)', html_content
+    ) or re.search(
+        rf'href="/works/\d+/episodes/(\d+)"[^>]*id="{link_id}"', html_content
+    )
+    return match.group(1) if match else None
 
 
 def extract_kakuyomu_adjacent_episodes(
     html_content: str,
 ) -> tuple[str | None, str | None]:
     """カクヨムのエピソードHTMLから前後のエピソードIDを抽出"""
-    prev_match = KAKUYOMU_PREV_EPISODE_PATTERN.search(html_content)
-    next_match = KAKUYOMU_NEXT_EPISODE_PATTERN.search(html_content)
-    prev_id = prev_match.group(1) if prev_match else None
-    next_id = next_match.group(1) if next_match else None
+    prev_id = _extract_adjacent_episode_id(html_content, "contentMain-readPreviousEpisode")
+    next_id = _extract_adjacent_episode_id(html_content, "contentMain-readNextEpisode")
     return prev_id, next_id
 
 
@@ -181,33 +189,36 @@ def build_epub(
         }
     }
 
-    with tempfile.NamedTemporaryFile(
+    tmp_file = tempfile.NamedTemporaryFile(
         prefix=f"{cache_path.stem}_", suffix=".epub", dir=cache_path.parent, delete=False
-    ) as tmp_file:
-        tmp_file_name = tmp_file.name
-        with zipfile.ZipFile(
-            tmp_file, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
-        ) as zf:
-            zf.writestr(
-                "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
-            )
-            zf.writestr("META-INF/container.xml", container())
-            zf.writestr("src/style.css", style())
-            zf.writestr(
-                "src/content.opf",
-                content(novel_title, "", timestamp, episodes, unique_images),
-            )
-            zf.writestr("src/navigation.xhtml", nav(chapters))
-            zf.writestr("src/metadata.json", json.dumps(metadata))
-            zf.writestr(
-                f"src/text/{episode_id}.xhtml",
-                text(episode_title, paragraphs),
-            )
-            for image in images:
-                if image["id"] in image_ids:
-                    zf.writestr(f"src/image/{image['name']}", image["data"])
-
-    Path(tmp_file_name).replace(cache_path)
+    )
+    try:
+        with tmp_file:
+            with zipfile.ZipFile(
+                tmp_file, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+            ) as zf:
+                zf.writestr(
+                    "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
+                )
+                zf.writestr("META-INF/container.xml", container())
+                zf.writestr("src/style.css", style())
+                zf.writestr(
+                    "src/content.opf",
+                    content(novel_title, "", timestamp, episodes, unique_images),
+                )
+                zf.writestr("src/navigation.xhtml", nav(chapters))
+                zf.writestr("src/metadata.json", json.dumps(metadata))
+                zf.writestr(
+                    f"src/text/{episode_id}.xhtml",
+                    text(episode_title, paragraphs),
+                )
+                for image in images:
+                    if image["id"] in image_ids:
+                        zf.writestr(f"src/image/{image['name']}", image["data"])
+        Path(tmp_file.name).replace(cache_path)
+    except BaseException:
+        Path(tmp_file.name).unlink(missing_ok=True)
+        raise
     return cache_path
 
 
@@ -225,6 +236,11 @@ def generate_narou_epub(novel_id: str, episode_num: int) -> Path:
 
     parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
     parser.feed(html_content)
+
+    # 本文が取れていない（ページ構造の変更・削除済み作品など）場合は
+    # 壊れた EPUB をキャッシュしないように失敗させる
+    if not parser.paragraphs:
+        raise ValueError("本文を抽出できませんでした")
 
     episode_id = str(episode_num)
     metadata = {
@@ -268,6 +284,11 @@ def generate_kakuyomu_epub(
 
     parser = KakuyomuEpisodeParser(convert_tcy=True)
     parser.feed(html_content)
+
+    # 本文が取れていない（ページ構造の変更・削除済み作品など）場合は
+    # 壊れた EPUB をキャッシュしないように失敗させる
+    if not parser.paragraphs:
+        raise ValueError("本文を抽出できませんでした")
 
     # 前後のエピソードIDを抽出
     prev_ep_id, next_ep_id = extract_kakuyomu_adjacent_episodes(html_content)
@@ -336,6 +357,13 @@ def read_narou_episode(novel_id: str, episode: int):
 
     try:
         generate_narou_epub(novel_id, episode)
+    except urllib.error.HTTPError as e:
+        logging.error(
+            f"エピソード取得エラー: novel_id={novel_id}, episode={episode}, status={e.code}"
+        )
+        if e.code == 404:
+            return "エピソードが見つかりませんでした。URLを確認してください。", 404
+        return "エピソードの取得に失敗しました", 502
     except (IOError, ValueError) as e:
         logging.error(
             f"EPUB生成エラー: novel_id={novel_id}, episode={episode}, error={e}"
@@ -359,6 +387,13 @@ def read_kakuyomu_episode(work_id: str, episode_id: str):
 
     try:
         _, prev_ep, next_ep = generate_kakuyomu_epub(work_id, episode_id)
+    except urllib.error.HTTPError as e:
+        logging.error(
+            f"エピソード取得エラー: work_id={work_id}, episode_id={episode_id}, status={e.code}"
+        )
+        if e.code == 404:
+            return "エピソードが見つかりませんでした。URLを確認してください。", 404
+        return "エピソードの取得に失敗しました", 502
     except (IOError, ValueError) as e:
         logging.error(
             f"EPUB生成エラー: work_id={work_id}, episode_id={episode_id}, error={e}"

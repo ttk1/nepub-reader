@@ -1,1 +1,4 @@
 bibi-bookshelf/
+__pycache__/
+.venv/
+dev/
