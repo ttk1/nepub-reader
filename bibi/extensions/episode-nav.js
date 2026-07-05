@@ -16,27 +16,34 @@ Bibi.x({
     id: "EpisodeNavigation",
     description: "Navigate between episodes of Narou/Kakuyomu novels.",
     author: "Custom",
-    version: "2.0.0"
+    version: "2.1.0"
 })(function () {
 
-    // ページめくりのデバウンス用（リモコンのチャタリング対策）
-    var lastKeyTime = 0;
-    var KEY_DEBOUNCE_MS = 100; // 100ms以内の連続キー入力を無視
+    // ページめくりのチャタリング対策（リモコン使用時）
+    // キーイベントを握りつぶす方式は Bibi 内部の keydown/keyup ペア管理
+    // (KeyObserver.ActiveKeys) と食い違って取りこぼしや二重送りを招くため、
+    // フリップ動作そのものにクールダウンを掛ける
+    var FLIP_COOLDOWN_MS = 300;
 
-    function debounceKeyHandler(e) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    E.bind('bibi:opened', function () {
+        var lastFlipTime = 0;
+        var originalFlip = I.Flipper.flip;
+        I.Flipper.flip = function () {
             var now = Date.now();
-            if (now - lastKeyTime < KEY_DEBOUNCE_MS) {
-                e.stopImmediatePropagation();
-                e.preventDefault();
-                return;
-            }
-            lastKeyTime = now;
-        }
-    }
+            if (now - lastFlipTime < FLIP_COOLDOWN_MS) return Promise.resolve();
+            lastFlipTime = now;
+            return originalFlip.apply(I.Flipper, arguments);
+        };
+    });
 
-    // メインドキュメントにデバウンスハンドラを登録（キャプチャフェーズで先に処理）
-    document.addEventListener('keydown', debounceKeyHandler, true);
+    // Bibi は押下 300ms 以上のキーをタップ扱いせずページ送りしない
+    // （リモコンは押下時間が長くなりがち）ため、キーを離した時にも送る。
+    // 短押しで既に送られた分は上のクールダウンで抑止される
+    E.bind('bibi:upped-key', function (Eve) {
+        if (Eve.key === 'ArrowLeft' || Eve.key === 'ArrowRight') {
+            I.KeyObserver.onKeyTouch(Eve);
+        }
+    });
 
     // URL パラメータの book からサイト種別・小説ID・エピソードIDを取得
     // book=narou/{novel_id}_{episode}.epub または book=kakuyomu/{work_id}_{episode_id}.epub
@@ -300,8 +307,6 @@ Bibi.x({
         if (R && R.Items) {
             R.Items.forEach(function (item) {
                 if (item.contentDocument) {
-                    // デバウンスハンドラを先に登録（チャタリング対策）
-                    item.contentDocument.addEventListener('keydown', debounceKeyHandler, true);
                     item.contentDocument.addEventListener('keydown', handleKeyDown, true);
                     item.contentDocument.addEventListener('wheel', handleWheel, { passive: true });
                     // ルビが右端で見切れないよう余白を確保
