@@ -68,7 +68,7 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Roboto, sans-serif;
-            max-width: 800px;
+            max-width: 860px;
             margin: 0 auto;
             padding: 40px 20px 32px;
             line-height: 1.7;
@@ -233,7 +233,12 @@
             min-width: 200px;
         }
         .history-title {
-            display: block;
+            /* 旧形式の長いタイトルでも行が嵩まないよう最大3行で省略 */
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            overflow: hidden;
             font-weight: 500;
             color: var(--accent);
             word-break: break-word;
@@ -242,7 +247,9 @@
             display: block;
             font-size: 0.8em;
             color: var(--text-secondary);
-            word-break: break-word;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .history-meta {
             display: flex;
@@ -251,9 +258,16 @@
             font-size: 0.8em;
             color: var(--text-secondary);
             white-space: nowrap;
+            /* 数字の桁幅を揃えて列のガタつきを抑える */
+            font-variant-numeric: tabular-nums;
         }
+        /* バッジを右端の固定幅列にすることで、行ごとに文字数が違っても
+           縦の列として揃う（日時はバッジの左に密着して右揃えになる） */
         .badge {
             display: inline-block;
+            min-width: 4.6em;
+            text-align: center;
+            box-sizing: border-box;
             font-size: 0.9em;
             line-height: 1.4;
             padding: 0 8px;
@@ -262,6 +276,22 @@
         }
         .badge-narou { background: var(--badge-narou-bg); color: var(--badge-narou-fg); }
         .badge-kakuyomu { background: var(--badge-kakuyomu-bg); color: var(--badge-kakuyomu-fg); }
+        .history-external {
+            display: flex;
+            align-items: center;
+            color: var(--text-secondary);
+            padding: 6px 8px;
+            border-radius: 6px;
+            opacity: 0.7;
+            flex-shrink: 0;
+            transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+        }
+        .history-external:hover {
+            opacity: 1;
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+        .history-external svg { display: block; }
         .history-delete {
             background: transparent;
             color: var(--danger-color);
@@ -274,6 +304,19 @@
             opacity: 0.7;
             flex-shrink: 0;
             transition: background 0.15s ease, opacity 0.15s ease;
+            /* 隣の外部リンクと押し間違えないよう、仕切り線を挟んで距離を取る */
+            margin-left: 16px;
+            position: relative;
+        }
+        .history-delete::before {
+            content: "";
+            position: absolute;
+            left: -9px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: 16px;
+            background: var(--border-color);
         }
         .history-delete:hover {
             opacity: 1;
@@ -446,10 +489,6 @@
 
                     var meta = document.createElement('span');
                     meta.className = 'history-meta';
-                    var badge = document.createElement('span');
-                    badge.className = 'badge badge-' + site;
-                    badge.textContent = site === 'kakuyomu' ? 'カクヨム' : 'なろう';
-                    meta.appendChild(badge);
                     var metaText = document.createElement('span');
                     // カクヨムの last_episode はエピソード ID なので話数は出せない
                     var parts = [];
@@ -457,9 +496,24 @@
                     parts.push(formatDate(item.last_accessed));
                     metaText.textContent = parts.join('・');
                     meta.appendChild(metaText);
+                    var badge = document.createElement('span');
+                    badge.className = 'badge badge-' + site;
+                    badge.textContent = site === 'kakuyomu' ? 'カクヨム' : 'なろう';
+                    meta.appendChild(badge);
 
                     link.appendChild(textBox);
                     link.appendChild(meta);
+
+                    // 元サイトの作品トップページへの外部リンク
+                    var external = document.createElement('a');
+                    external.className = 'history-external';
+                    external.href = site === 'kakuyomu'
+                        ? 'https://kakuyomu.jp/works/' + encodeURIComponent(item.novel_id)
+                        : 'https://ncode.syosetu.com/' + encodeURIComponent(item.novel_id) + '/';
+                    external.target = '_blank';
+                    external.rel = 'noopener';
+                    external.title = site === 'kakuyomu' ? 'カクヨムで作品ページを開く' : '小説家になろうで作品ページを開く';
+                    external.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
 
                     var deleteBtn = document.createElement('button');
                     deleteBtn.className = 'history-delete';
@@ -474,6 +528,7 @@
                     })(historyKey);
 
                     li.appendChild(link);
+                    li.appendChild(external);
                     li.appendChild(deleteBtn);
                     list.appendChild(li);
                 });
