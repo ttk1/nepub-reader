@@ -98,6 +98,7 @@ Bibi.preset({
         // { "src": "../extensions/FOLDER-NAME-IF-EXISTS/FILE-NAME.js" }, // <THIS LINE IS AN EXAMPLE>
         { "src": "../extensions/custom-font.js" },
         { "src": "../extensions/episode-nav.js" },
+        { "src": "../extensions/width-adjuster.js" },
         ""],
 
 

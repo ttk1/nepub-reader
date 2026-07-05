@@ -324,7 +324,9 @@ Bibi.x({
 
                 var iframe = e.target.ownerDocument.defaultView.frameElement;
                 var iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0 };
-                var clickXInParent = iframeRect.left + e.clientX;
+                // ビューポート座標から Main 相対座標へ変換
+                // （表示幅制限で body が中央寄せされている場合もずれないように）
+                var clickXInParent = iframeRect.left + e.clientX - mainRect.left;
 
                 // 左側クリック（縦書きでは次ページ方向）
                 if (clickXInParent < flipperWidth && isLastSpread()) {
