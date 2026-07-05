@@ -16,7 +16,7 @@ Bibi.x({
     id: "EpisodeNavigation",
     description: "Navigate between episodes of Narou/Kakuyomu novels.",
     author: "Custom",
-    version: "2.1.0"
+    version: "2.2.0"
 })(function () {
 
     // ページめくりのチャタリング対策（リモコン使用時）
@@ -241,8 +241,21 @@ Bibi.x({
         }
     });
 
+    // エピソード名を取得（EPUB 本文の h1 に入っている）
+    function getEpisodeTitle() {
+        try {
+            if (R && R.Items && R.Items[0] && R.Items[0].contentDocument) {
+                var h1 = R.Items[0].contentDocument.querySelector('h1');
+                if (h1) return h1.textContent.trim();
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    }
+
     // 読書履歴を LocalStorage に保存
-    function saveReadingHistory(info, novelTitle) {
+    function saveReadingHistory(info, novelTitle, episodeTitle) {
         if (!info) return;
         var STORAGE_KEY = 'nepub_reading_history';
         var MAX_HISTORY = 50;
@@ -264,6 +277,7 @@ Bibi.x({
             site: info.site || 'narou',
             novel_id: info.novel,
             novel_title: novelTitle || info.novel,
+            episode_title: episodeTitle || '',
             last_episode: info.episode,
             last_accessed: new Date().toISOString()
         };
@@ -347,8 +361,7 @@ Bibi.x({
 
         // 読書履歴を保存
         if (info) {
-            var novelTitle = getNovelTitle();
-            saveReadingHistory(info, novelTitle);
+            saveReadingHistory(info, getNovelTitle(), getEpisodeTitle());
         }
 
         // メニューバーにトップページへ戻るボタンを追加

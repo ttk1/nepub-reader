@@ -4,95 +4,202 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>nepub-reader</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
     <style>
         :root {
-            --bg-color: #ffffff;
-            --text-color: #333333;
-            --text-secondary: #666666;
-            --card-bg: #f9f9f9;
-            --code-bg: #f4f4f4;
-            --border-color: #cccccc;
-            --link-color: #0066cc;
-            --button-bg: #0066cc;
-            --button-hover: #0055aa;
+            color-scheme: light dark;
+            --bg-color: #f6f7f9;
+            --card-bg: #ffffff;
+            --text-color: #1f2328;
+            --text-secondary: #667085;
+            --border-color: #e4e7ec;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --accent-soft: #eff4ff;
+            --button-bg: #2563eb;
+            --button-hover: #1d4ed8;
+            --button-fg: #ffffff;
+            --focus-ring: rgba(37, 99, 235, 0.2);
             --input-bg: #ffffff;
-            --danger-color: #cc3333;
+            --danger-color: #dc2626;
+            --danger-fill: #dc2626;
+            --danger-fill-fg: #ffffff;
+            --kbd-bg: #f2f4f7;
+            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+            --badge-narou-bg: #e6f4ef;
+            --badge-narou-fg: #0e7a5f;
+            --badge-kakuyomu-bg: #e8efff;
+            --badge-kakuyomu-fg: #2e5bd7;
         }
         @media (prefers-color-scheme: dark) {
             :root {
-                --bg-color: #1a1a1a;
-                --text-color: #e0e0e0;
-                --text-secondary: #a0a0a0;
-                --card-bg: #2a2a2a;
-                --code-bg: #333333;
-                --border-color: #444444;
-                --link-color: #6ab0f3;
-                --button-bg: #4a90d9;
-                --button-hover: #3a7bc8;
-                --input-bg: #2a2a2a;
-                --danger-color: #ff6666;
+                --bg-color: #111418;
+                --card-bg: #1b2026;
+                --text-color: #e6e9ec;
+                --text-secondary: #98a2b3;
+                --border-color: #2c333b;
+                --accent: #4f8df9;
+                --accent-hover: #6da3fb;
+                --accent-soft: #1d2836;
+                /* ダークモードのボタンは眩しくならないよう輝度を落とした青 +
+                   純白でないテキストにする */
+                --button-bg: #2b57ad;
+                --button-hover: #4679e0;
+                --button-fg: #e8edf7;
+                --focus-ring: rgba(79, 141, 249, 0.3);
+                --input-bg: #14181d;
+                --danger-color: #f87171;
+                /* 塗りつぶし時は眩しくならないよう輝度を落とした赤 + オフホワイト */
+                --danger-fill: #a33b3b;
+                --danger-fill-fg: #f5e9e9;
+                --kbd-bg: #262d35;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+                --badge-narou-bg: #14332a;
+                --badge-narou-fg: #4cc2a2;
+                --badge-kakuyomu-bg: #1a2542;
+                --badge-kakuyomu-fg: #7ea4f8;
             }
         }
+        * { box-sizing: border-box; }
+        /* キーボード操作時のフォーカスを見えるように */
+        button:focus-visible, a:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Roboto, sans-serif;
             max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            line-height: 1.8;
+            margin: 0 auto;
+            padding: 40px 20px 32px;
+            line-height: 1.7;
             background-color: var(--bg-color);
             color: var(--text-color);
         }
-        h1, h2, h3 { color: var(--text-color); }
-        code {
-            background: var(--code-bg);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.9em;
+
+        /* ---- ヘッダー ---- */
+        .site-header {
+            text-align: center;
+            margin-bottom: 32px;
         }
-        a { color: var(--link-color); }
-        input[type="text"] {
-            padding: 8px 12px;
-            font-size: 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background: var(--input-bg);
-            color: var(--text-color);
+        .site-header h1 {
+            margin: 0;
+            font-size: 1.9em;
+            letter-spacing: 0.01em;
         }
-        input[type="text"].url-input {
-            flex: 1;
-            min-width: 300px;
+        .site-header .tagline {
+            margin: 6px 0 0;
+            color: var(--text-secondary);
+            font-size: 0.95em;
         }
 
-        button {
-            padding: 8px 16px;
-            font-size: 16px;
-            background: var(--button-bg);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover { background: var(--button-hover); }
-        .form-group {
-            margin: 20px 0;
-            padding: 15px;
+        /* ---- カード ---- */
+        .card {
             background: var(--card-bg);
-            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 20px 24px;
+            margin: 20px 0;
         }
-        .form-group h3 {
-            margin: 0 0 10px 0;
-            font-size: 1em;
+        .card h2, .field-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px;
+            font-size: 1.0em;
+            font-weight: 600;
+        }
+        /* 見出しのアクセントバー */
+        .card h2::before, .field-label::before {
+            content: "";
+            width: 4px;
+            height: 14px;
+            border-radius: 2px;
+            background: var(--accent);
+            flex-shrink: 0;
         }
         .form-row {
             display: flex;
             gap: 10px;
-            align-items: center;
             flex-wrap: wrap;
         }
+        input[type="text"] {
+            flex: 1;
+            min-width: 240px;
+            padding: 10px 14px;
+            font-size: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--input-bg);
+            color: var(--text-color);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        input[type="text"]::placeholder { color: var(--text-secondary); opacity: 0.7; }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--focus-ring);
+        }
+        button[type="submit"] {
+            padding: 10px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            background: var(--button-bg);
+            color: var(--button-fg);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        button[type="submit"]:hover { background: var(--button-hover); }
         .hint {
             font-size: 0.85em;
             color: var(--text-secondary);
-            margin-top: 8px;
+            margin: 12px 0 0;
+        }
+        .hint b { color: var(--text-color); font-weight: 600; }
+
+        /* ---- 履歴 ---- */
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .history-header h2 { margin: 0; }
+        .history-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .history-clear {
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.8em;
+            padding: 4px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .history-clear:hover {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        /* 全消去は危険操作なので他のボタンと見た目を分け、距離も取る */
+        .history-clear.history-danger {
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+            opacity: 0.75;
+            margin-left: 12px;
+        }
+        .history-clear.history-danger:hover {
+            background: var(--danger-fill);
+            border-color: var(--danger-fill);
+            color: var(--danger-fill-fg);
+            opacity: 1;
         }
         .history-list {
             list-style: none;
@@ -101,108 +208,167 @@
         }
         .history-item {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            padding: 10px 0;
+            align-items: center;
+            gap: 4px;
             border-bottom: 1px solid var(--border-color);
-            gap: 10px;
         }
-        .history-item:last-child {
-            border-bottom: none;
+        .history-item:last-child { border-bottom: none; }
+        .history-link {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px 16px;
+            flex-wrap: wrap;
+            padding: 10px 8px;
+            margin: 0 -8px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s ease;
+        }
+        .history-link:hover { background: var(--accent-soft); }
+        .history-text {
+            flex: 1;
+            min-width: 200px;
+        }
+        .history-title {
+            display: block;
+            font-weight: 500;
+            color: var(--accent);
+            word-break: break-word;
+        }
+        .history-episode {
+            display: block;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            word-break: break-word;
         }
         .history-meta {
-            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8em;
             color: var(--text-secondary);
             white-space: nowrap;
-            flex-shrink: 0;
         }
-        .history-clear {
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 0.85em;
-            padding: 4px 8px;
-            border: 1px solid var(--border-color);
+        .badge {
+            display: inline-block;
+            font-size: 0.9em;
+            line-height: 1.4;
+            padding: 0 8px;
+            border-radius: 999px;
+            font-weight: 600;
         }
-        .history-clear:hover {
-            background: var(--card-bg);
-            color: var(--text-color);
-        }
-        .history-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .history-header h3 {
-            margin: 0;
-        }
+        .badge-narou { background: var(--badge-narou-bg); color: var(--badge-narou-fg); }
+        .badge-kakuyomu { background: var(--badge-kakuyomu-bg); color: var(--badge-kakuyomu-fg); }
         .history-delete {
             background: transparent;
-            color: var(--text-secondary);
-            font-size: 0.85em;
-            padding: 2px 8px;
+            color: var(--danger-color);
+            font-size: 0.9em;
+            line-height: 1;
+            padding: 6px 9px;
             border: none;
+            border-radius: 6px;
             cursor: pointer;
-            opacity: 0.6;
-            margin-left: 10px;
+            opacity: 0.7;
             flex-shrink: 0;
+            transition: background 0.15s ease, opacity 0.15s ease;
         }
         .history-delete:hover {
             opacity: 1;
-            color: var(--danger-color);
+            background: var(--danger-fill);
+            color: var(--danger-fill-fg);
         }
-        .history-item-content {
-            display: flex;
-            align-items: flex-start;
-            flex: 1;
+        .history-empty {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            padding: 8px 0;
         }
-        .history-item-content a {
-            text-decoration: none;
-            font-weight: 500;
-            word-break: break-word;
+
+        /* ---- 操作方法 ---- */
+        .help-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.85em;
+            color: var(--text-secondary);
         }
-        .history-item-content a:hover {
-            text-decoration: underline;
+        .help-list li { padding: 3px 0; }
+        kbd {
+            display: inline-block;
+            min-width: 1.6em;
+            text-align: center;
+            padding: 1px 5px;
+            font-size: 0.9em;
+            font-family: inherit;
+            color: var(--text-color);
+            background: var(--kbd-bg);
+            border: 1px solid var(--border-color);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+        }
+
+        /* ---- フッター ---- */
+        .site-footer {
+            text-align: center;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            margin-top: 28px;
         }
     </style>
 </head>
 <body>
-    <h1>nepub-reader</h1>
-    <p>小説家になろう・カクヨムの作品を縦書き表示で快適に読めるリーダーです。</p>
+    <header class="site-header">
+        <h1>📖 nepub-reader</h1>
+        <p class="tagline">「小説家になろう」「カクヨム」の作品を縦書きで快適に読むリーダー</p>
+    </header>
 
-    <div class="form-group">
-        <h3>エピソードを開く</h3>
-        <form action="/go" method="get">
-            <div class="form-row">
-                <input type="text" name="url" class="url-input" placeholder="https://ncode.syosetu.com/nXXXXXX/1/" required>
-                <button type="submit">読む</button>
+    <main>
+        <section class="card">
+            <form action="/go" method="get">
+                <label class="field-label" for="url-input">作品 URL を入力</label>
+                <div class="form-row">
+                    <input type="text" id="url-input" name="url" placeholder="https://ncode.syosetu.com/nXXXXXX/1/" required autofocus>
+                    <button type="submit">読む</button>
+                </div>
+            </form>
+            <p class="hint">
+                <b>小説家になろう</b>: エピソード URL または小説トップ URL（1話から開始）<br>
+                <b>カクヨム</b>: エピソード URL を入力してください
+            </p>
+        </section>
+
+        <section class="card" id="history-section">
+            <div class="history-header">
+                <h2>最近読んだ作品</h2>
+                <span class="history-actions">
+                    <button class="history-clear" id="history-import">インポート</button>
+                    <button class="history-clear" id="history-export">エクスポート</button>
+                    <button class="history-clear history-danger" id="history-clear-btn">履歴をクリア</button>
+                </span>
             </div>
-        </form>
-        <p class="hint">
-            <b>小説家になろう</b>: エピソードURLまたは小説トップURL（1話から開始）<br>
-            <b>カクヨム</b>: エピソードURLを入力してください
-        </p>
-    </div>
+            <ul class="history-list" id="history-list"></ul>
+            <input type="file" id="history-import-file" accept=".json,application/json" style="display: none;">
+        </section>
 
-    <div class="form-group" id="history-section" style="display: none;">
-        <div class="history-header">
-            <h3>最近読んだ作品</h3>
-            <button class="history-clear" onclick="clearHistory()">履歴をクリア</button>
-        </div>
-        <ul class="history-list" id="history-list"></ul>
-    </div>
+        <section class="card">
+            <h2>操作方法</h2>
+            <ul class="help-list">
+                <li><kbd>←</kbd> / <kbd>→</kbd> でページ移動（端に到達すると次/前のエピソードへ自動移動）</li>
+                <li>メニューバーから文字サイズ・表示幅を変更できます</li>
+            </ul>
+        </section>
+    </main>
 
-    <div class="form-group">
-        <h3>操作方法</h3>
-        <p class="hint" style="margin-top: 0;">
-            <b>← / → キー</b>: ページ移動（端に到達すると次/前のエピソードへ自動移動）<br>
-            <b>メニューバー</b>: 文字サイズ変更
-        </p>
-    </div>
+    <footer class="site-footer">
+        本ツールは個人利用を想定しています
+    </footer>
 
     <script>
         (function() {
             var STORAGE_KEY = 'nepub_reading_history';
+            var MAX_HISTORY = 50;
 
             function getHistory() {
                 try {
@@ -210,6 +376,14 @@
                     return stored ? JSON.parse(stored) : [];
                 } catch (e) {
                     return [];
+                }
+            }
+
+            function saveHistory(history) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+                } catch (e) {
+                    // ignore
                 }
             }
 
@@ -228,28 +402,68 @@
             }
 
             function loadHistory() {
-                var section = document.getElementById('history-section');
                 var list = document.getElementById('history-list');
                 var history = getHistory();
+                // 履歴が空でもインポートできるようセクションは常時表示し、
+                // 意味のないボタンだけ隠す
+                document.getElementById('history-export').style.display = history.length ? '' : 'none';
+                document.getElementById('history-clear-btn').style.display = history.length ? '' : 'none';
+                list.innerHTML = '';
                 if (history.length === 0) {
-                    section.style.display = 'none';
+                    var empty = document.createElement('li');
+                    empty.className = 'history-empty';
+                    empty.textContent = '履歴はありません（別の PC の履歴はエクスポート/インポートで移せます）';
+                    list.appendChild(empty);
                     return;
                 }
-                section.style.display = 'block';
-                list.innerHTML = '';
                 history.forEach(function(item) {
+                    var site = item.site || 'narou';
+
                     var li = document.createElement('li');
                     li.className = 'history-item';
-                    var contentDiv = document.createElement('div');
-                    contentDiv.className = 'history-item-content';
+
                     var link = document.createElement('a');
-                    var site = item.site || 'narou';
+                    link.className = 'history-link';
                     link.href = '/read/' + site + '/' + item.novel_id + '/' + item.last_episode;
-                    var title = item.novel_title || (item.novel_id + ' - ' + item.last_episode + '話');
-                    link.textContent = title;
+
+                    var textBox = document.createElement('span');
+                    textBox.className = 'history-text';
+
+                    var title = document.createElement('span');
+                    title.className = 'history-title';
+                    var titleText = item.novel_title || (item.novel_id + ' - ' + item.last_episode + '話');
+                    // 旧形式の履歴に残っているサイト名サフィックスを表示時に除去
+                    // （新しい履歴はサーバー側で作品名だけが保存される）
+                    title.textContent = titleText.replace(/ - カクヨム$/, '');
+                    textBox.appendChild(title);
+
+                    if (item.episode_title) {
+                        var episode = document.createElement('span');
+                        episode.className = 'history-episode';
+                        episode.textContent = item.episode_title;
+                        textBox.appendChild(episode);
+                    }
+
+                    var meta = document.createElement('span');
+                    meta.className = 'history-meta';
+                    var badge = document.createElement('span');
+                    badge.className = 'badge badge-' + site;
+                    badge.textContent = site === 'kakuyomu' ? 'カクヨム' : 'なろう';
+                    meta.appendChild(badge);
+                    var metaText = document.createElement('span');
+                    // カクヨムの last_episode はエピソード ID なので話数は出せない
+                    var parts = [];
+                    if (site === 'narou') parts.push('第' + item.last_episode + '話');
+                    parts.push(formatDate(item.last_accessed));
+                    metaText.textContent = parts.join('・');
+                    meta.appendChild(metaText);
+
+                    link.appendChild(textBox);
+                    link.appendChild(meta);
+
                     var deleteBtn = document.createElement('button');
                     deleteBtn.className = 'history-delete';
-                    deleteBtn.textContent = '×';
+                    deleteBtn.textContent = '✕';
                     deleteBtn.title = 'この履歴を削除';
                     var historyKey = site + ':' + item.novel_id;
                     deleteBtn.onclick = (function(key) {
@@ -258,13 +472,9 @@
                             deleteHistoryItem(key);
                         };
                     })(historyKey);
-                    contentDiv.appendChild(link);
-                    contentDiv.appendChild(deleteBtn);
-                    var meta = document.createElement('span');
-                    meta.className = 'history-meta';
-                    meta.textContent = formatDate(item.last_accessed);
-                    li.appendChild(contentDiv);
-                    li.appendChild(meta);
+
+                    li.appendChild(link);
+                    li.appendChild(deleteBtn);
                     list.appendChild(li);
                 });
             }
@@ -274,16 +484,106 @@
                     var itemKey = (item.site || 'narou') + ':' + item.novel_id;
                     return itemKey !== key;
                 });
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+                saveHistory(history);
                 loadHistory();
             }
 
-            window.clearHistory = function() {
+            // ---- エクスポート / インポート ----
+
+            function exportHistory() {
+                var data = {
+                    nepub_reader_export: 1,
+                    exported_at: new Date().toISOString(),
+                    history: getHistory()
+                };
+                var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'nepub-reader-history_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            }
+
+            // インポートデータの各エントリを検証し、既知のフィールドだけ残す
+            function sanitizeItem(item) {
+                if (!item || typeof item !== 'object') return null;
+                if (!item.novel_id || item.last_episode === undefined || item.last_episode === null) return null;
+                return {
+                    site: item.site === 'kakuyomu' ? 'kakuyomu' : 'narou',
+                    novel_id: String(item.novel_id),
+                    novel_title: typeof item.novel_title === 'string' ? item.novel_title : String(item.novel_id),
+                    episode_title: typeof item.episode_title === 'string' ? item.episode_title : '',
+                    last_episode: item.last_episode,
+                    last_accessed: typeof item.last_accessed === 'string' ? item.last_accessed : ''
+                };
+            }
+
+            // 同一作品 (site:novel_id) は last_accessed が新しい方を残してマージ
+            function mergeHistory(current, imported) {
+                var map = {};
+                var order = [];
+                current.concat(imported).forEach(function(item) {
+                    var key = (item.site || 'narou') + ':' + item.novel_id;
+                    var existing = map[key];
+                    if (!existing) order.push(key);
+                    // ISO 8601 文字列は辞書順比較で時刻順になる
+                    if (!existing || String(item.last_accessed || '') > String(existing.last_accessed || '')) {
+                        map[key] = item;
+                    }
+                });
+                var merged = order.map(function(key) { return map[key]; });
+                merged.sort(function(a, b) {
+                    var x = String(a.last_accessed || '');
+                    var y = String(b.last_accessed || '');
+                    return x > y ? -1 : x < y ? 1 : 0;
+                });
+                return merged.slice(0, MAX_HISTORY);
+            }
+
+            function importHistoryFromFile(file) {
+                var reader = new FileReader();
+                reader.onload = function() {
+                    try {
+                        var data = JSON.parse(reader.result);
+                        // エクスポート形式 {history: [...]} と生の配列の両方を受け付ける
+                        var imported = Array.isArray(data) ? data
+                            : (data && Array.isArray(data.history)) ? data.history
+                            : null;
+                        if (!imported) throw new Error('unsupported format');
+                        var items = imported.map(sanitizeItem).filter(Boolean);
+                        if (items.length === 0) {
+                            alert('読み込める履歴がありませんでした');
+                            return;
+                        }
+                        saveHistory(mergeHistory(getHistory(), items));
+                        loadHistory();
+                        alert(items.length + ' 件の履歴を取り込みました');
+                    } catch (e) {
+                        alert('履歴ファイルを読み込めませんでした。エクスポートした JSON ファイルを指定してください。');
+                    }
+                };
+                reader.readAsText(file);
+            }
+
+            document.getElementById('history-export').addEventListener('click', exportHistory);
+            var importInput = document.getElementById('history-import-file');
+            document.getElementById('history-import').addEventListener('click', function() {
+                importInput.click();
+            });
+            importInput.addEventListener('change', function() {
+                if (importInput.files[0]) {
+                    importHistoryFromFile(importInput.files[0]);
+                    importInput.value = '';
+                }
+            });
+            document.getElementById('history-clear-btn').addEventListener('click', function() {
                 if (confirm('読書履歴をすべて削除しますか？')) {
                     localStorage.removeItem(STORAGE_KEY);
                     loadHistory();
                 }
-            };
+            });
 
             loadHistory();
         })();

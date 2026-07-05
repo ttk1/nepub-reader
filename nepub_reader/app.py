@@ -9,7 +9,14 @@ import urllib.error
 import zipfile
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+)
 from nepub.epub import container, content, nav, text
 from nepub.http import get
 from nepub.parser.kakuyomu import KakuyomuEpisodeParser
@@ -64,6 +71,7 @@ def set_security_headers(response):
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     return response
 
+
 # Bibi の静的ファイルパス
 BIBI_DIR = PROJECT_ROOT / "bibi"
 BOOKSHELF_DIR = PROJECT_ROOT / "bibi-bookshelf"
@@ -83,7 +91,6 @@ NAROU_URL_PATTERN = re.compile(
 KAKUYOMU_URL_PATTERN = re.compile(
     r"https?://kakuyomu\.jp/works/(\d+)(?:/episodes/(\d+))?/?"
 )
-
 
 
 def parse_narou_url(url: str) -> tuple[str | None, int | None]:
@@ -106,15 +113,36 @@ def parse_kakuyomu_url(url: str) -> tuple[str | None, str | None]:
     return work_id, episode_id
 
 
-def extract_novel_title(html_content: str) -> str | None:
-    """エピソードページのHTMLから小説タイトルを抽出"""
-    # <title>作品タイトル - エピソードタイトル</title> から取得
+def extract_page_title(html_content: str) -> str | None:
+    """エピソードページの <title> をプレーンテキストとして抽出（エスケープなし）"""
     match = re.search(r"<title>(.+?)</title>", html_content, re.DOTALL)
     if match:
-        # 生HTMLには実体参照 (&amp; 等) が残っているため、一度戻してから
-        # EPUB 用にエスケープし直す（二重エスケープ防止）
-        return html.escape(html.unescape(match.group(1).strip()))
+        # 生HTMLには実体参照 (&amp; 等) が残っているため戻す
+        return html.unescape(match.group(1).strip())
     return None
+
+
+def clean_narou_novel_title(title_text: str, episode_title: str) -> str:
+    """なろうの <title>（作品名 - エピソード名）から作品名を取り出す"""
+    if episode_title:
+        suffix = " - " + episode_title
+        if title_text.endswith(suffix):
+            return title_text[: -len(suffix)].strip() or title_text
+    return title_text
+
+
+def clean_kakuyomu_novel_title(title_text: str, episode_title: str) -> str:
+    """カクヨムの <title>（エピソード名 - 作品名（作者名） - カクヨム）から作品名を取り出す"""
+    text = title_text
+    if text.endswith(" - カクヨム"):
+        text = text[: -len(" - カクヨム")]
+    if episode_title:
+        prefix = episode_title + " - "
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+    # 末尾の（作者名）を除去
+    text = re.sub(r"（[^（）]*）$", "", text).strip()
+    return text or title_text
 
 
 def _extract_adjacent_episode_id(html_content: str, link_id: str) -> str | None:
@@ -135,7 +163,9 @@ def extract_kakuyomu_adjacent_episodes(
     html_content: str,
 ) -> tuple[str | None, str | None]:
     """カクヨムのエピソードHTMLから前後のエピソードIDを抽出"""
-    prev_id = _extract_adjacent_episode_id(html_content, "contentMain-readPreviousEpisode")
+    prev_id = _extract_adjacent_episode_id(
+        html_content, "contentMain-readPreviousEpisode"
+    )
     next_id = _extract_adjacent_episode_id(html_content, "contentMain-readNextEpisode")
     return prev_id, next_id
 
@@ -198,7 +228,10 @@ def build_epub(
     }
 
     tmp_file = tempfile.NamedTemporaryFile(
-        prefix=f"{cache_path.stem}_", suffix=".epub", dir=cache_path.parent, delete=False
+        prefix=f"{cache_path.stem}_",
+        suffix=".epub",
+        dir=cache_path.parent,
+        delete=False,
     )
     try:
         with tmp_file:
@@ -240,8 +273,6 @@ def generate_narou_epub(novel_id: str, episode_num: int) -> Path:
     episode_url = f"https://ncode.syosetu.com/{novel_id}/{episode_num}/"
     html_content = get(episode_url)
 
-    novel_title = extract_novel_title(html_content) or novel_id
-
     parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
     parser.feed(html_content)
 
@@ -249,6 +280,16 @@ def generate_narou_epub(novel_id: str, episode_num: int) -> Path:
     # 壊れた EPUB をキャッシュしないように失敗させる
     if not parser.paragraphs:
         raise ValueError("本文を抽出できませんでした")
+
+    # <title> は「作品名 - エピソード名」形式なので、パース済みの
+    # エピソード名（tcy 加工前の生テキスト）を使って作品名だけ取り出す
+    page_title = extract_page_title(html_content)
+    raw_episode_title = str(getattr(parser, "_title", "")).strip()
+    novel_title = (
+        html.escape(clean_narou_novel_title(page_title, raw_episode_title))
+        if page_title
+        else novel_id
+    )
 
     episode_id = str(episode_num)
     metadata = {
@@ -288,8 +329,6 @@ def generate_kakuyomu_epub(
     episode_url = f"https://kakuyomu.jp/works/{work_id}/episodes/{episode_id}"
     html_content = get(episode_url)
 
-    novel_title = extract_novel_title(html_content) or work_id
-
     parser = KakuyomuEpisodeParser(convert_tcy=True)
     parser.feed(html_content)
 
@@ -297,6 +336,16 @@ def generate_kakuyomu_epub(
     # 壊れた EPUB をキャッシュしないように失敗させる
     if not parser.paragraphs:
         raise ValueError("本文を抽出できませんでした")
+
+    # <title> は「エピソード名 - 作品名（作者名） - カクヨム」形式なので、
+    # パース済みのエピソード名（tcy 加工前の生テキスト）を使って作品名だけ取り出す
+    page_title = extract_page_title(html_content)
+    raw_episode_title = str(getattr(parser, "_title", "")).strip()
+    novel_title = (
+        html.escape(clean_kakuyomu_novel_title(page_title, raw_episode_title))
+        if page_title
+        else work_id
+    )
 
     # 前後のエピソードIDを抽出
     prev_ep_id, next_ep_id = extract_kakuyomu_adjacent_episodes(html_content)
@@ -349,7 +398,10 @@ def go():
     work_id, episode_id = parse_kakuyomu_url(url)
     if work_id:
         if not episode_id:
-            return "カクヨムのURLにはエピソードIDが必要です。エピソードページのURLを入力してください。", 400
+            return (
+                "カクヨムのURLにはエピソードIDが必要です。エピソードページのURLを入力してください。",
+                400,
+            )
         return redirect(f"/read/kakuyomu/{work_id}/{episode_id}")
 
     return "無効なURLです。小説家になろうまたはカクヨムのURLを入力してください。", 400
