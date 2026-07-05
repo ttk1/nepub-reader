@@ -56,6 +56,14 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 app = Flask(__name__, static_folder=None)
 
+
+@app.after_request
+def set_security_headers(response):
+    """全レスポンスにセキュリティヘッダーを付与"""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    return response
+
 # Bibi の静的ファイルパス
 BIBI_DIR = PROJECT_ROOT / "bibi"
 BOOKSHELF_DIR = PROJECT_ROOT / "bibi-bookshelf"
@@ -498,9 +506,12 @@ def main():
     """サーバーを起動"""
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    # デバッグモードでは Werkzeug デバッガ経由で任意コード実行が可能になるため、
+    # HOST で明示されない限りローカルホストにのみバインドする
+    host = os.environ.get("HOST", "127.0.0.1" if debug else "0.0.0.0")
     print("nepub-reader を起動中...")
     print(f"http://localhost:{port}/ でアクセスできます")
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug)
 
 
 if __name__ == "__main__":
