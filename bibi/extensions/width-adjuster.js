@@ -12,7 +12,7 @@ Bibi.x({
     id: "WidthAdjuster",
     description: "Adjust the width of the reading area.",
     author: "Custom",
-    version: "1.0.1"
+    version: "1.0.2"
 })(function () {
 
     // 0 は制限なし（全幅）
@@ -64,12 +64,21 @@ Bibi.x({
             /* dress が li を 31px（アイコン幅）に固定しているため、\
                このグループだけ内容に合わせて広げる */\
             #bibi-buttongroup-width li.bibi-buttonbox { width: auto; }\
+            /* 配色はメニューアイコン (#bibi-menu .bibi-icon) の dress 定義に合わせる。\
+               color-scheme: light で OS ダークモード時のフォーム暗色化を防ぐ */\
             #bibi-buttongroup-width select {\
                 display: block; box-sizing: border-box;\
-                height: 31px; margin: 0; padding: 0 4px;\
-                font-size: 12px; color: #404040;\
-                background: #fff; border: 1px solid #c0c0c1; border-radius: 3px;\
-                cursor: pointer;\
+                height: 31px; margin: 0; padding: 0 6px;\
+                font-size: 12px; color: #909090;\
+                color-scheme: light;\
+                background: hsla(0, 0%, 100%, .9);\
+                border: 1px solid #ececec; border-radius: 3px;\
+                outline: none; cursor: pointer;\
+                transition: color .125s linear, background-color .125s linear, border-color .125s linear;\
+            }\
+            #bibi-buttongroup-width select:hover {\
+                color: #404040; border-color: silver;\
+                background-color: hsla(0, 0%, 97.3%, .9);\
             }';
         document.head.appendChild(style);
 
