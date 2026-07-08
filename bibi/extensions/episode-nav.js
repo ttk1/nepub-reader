@@ -16,14 +16,26 @@ Bibi.x({
     id: "EpisodeNavigation",
     description: "Navigate between episodes of Narou/Kakuyomu novels.",
     author: "Custom",
-    version: "2.2.0"
+    version: "2.3.0"
 })(function () {
 
-    // ページめくりのチャタリング対策（リモコン使用時）
-    // キーイベントを握りつぶす方式は Bibi 内部の keydown/keyup ペア管理
-    // (KeyObserver.ActiveKeys) と食い違って取りこぼしや二重送りを招くため、
-    // フリップ動作そのものにクールダウンを掛ける
-    var FLIP_COOLDOWN_MS = 300;
+    // リモコン操作でのページ飛び対策。原因は 2 つあった:
+    //
+    // 1. R.moveBy は I.PageObserver.Current(IntersectionObserver /
+    //    スクロール終了タイマー経由で遅れて更新されるキャッシュ)を基準に
+    //    移動先を計算するため、flip 直後に逆方向へ flip すると古い位置基準で
+    //    2 ページ戻る（順方向は「整列」になり無反応に見える）
+    //    → flip 直前に updateCurrent() で実座標から再計算して防ぐ
+    //
+    // 2. Bibi のキー処理は「短押しは keyup 時（bibi:touched-key）・
+    //    長押し中はキーリピートごと（bibi:is-holding-key）」に flip するため、
+    //    押下時間が長くなりがちなリモコンでは 1 押下で複数回 flip されうる
+    //    → ページ送りモードの Arrow キーに限り Bibi 側の flip を抑止し、
+    //      「最初の keydown で 1 回だけ」flip する方式に置き換える
+    //
+    // クールダウンは接点バウンス（チャタリング）への保険としてのみ残す。
+    // 意図的な連打（>150ms 間隔）を食わないよう短めにしてある
+    var FLIP_COOLDOWN_MS = 100;
 
     E.bind('bibi:opened', function () {
         var lastFlipTime = 0;
@@ -32,17 +44,44 @@ Bibi.x({
             var now = Date.now();
             if (now - lastFlipTime < FLIP_COOLDOWN_MS) return Promise.resolve();
             lastFlipTime = now;
+            if (I.PageObserver && I.PageObserver.updateCurrent) I.PageObserver.updateCurrent();
             return originalFlip.apply(I.Flipper, arguments);
         };
-    });
 
-    // Bibi は押下 300ms 以上のキーをタップ扱いせずページ送りしない
-    // （リモコンは押下時間が長くなりがち）ため、キーを離した時にも送る。
-    // 短押しで既に送られた分は上のクールダウンで抑止される
-    E.bind('bibi:upped-key', function (Eve) {
-        if (Eve.key === 'ArrowLeft' || Eve.key === 'ArrowRight') {
+        if (!I.KeyObserver || !I.KeyObserver.onKeyTouch) return;
+
+        // Arrow キーが「1 ページ送り（距離 ±1）」に割り当てられているか。
+        // スクロールモードのステップ移動（±9）や head/foot ジャンプは
+        // 素通しして Bibi 本来の挙動（キーリピート含む）を保つ
+        var isFlipArrow = function (Eve) {
+            if (Eve.key !== 'ArrowLeft' && Eve.key !== 'ArrowRight') return false;
+            if (!Eve.BibiKeyName) return false;
+            var name = !Eve.shiftKey ? Eve.BibiKeyName : Eve.BibiKeyName.toUpperCase();
+            var param = I.KeyObserver.KeyParameters[name];
+            return param === 1 || param === -1;
+        };
+
+        // Bibi 側の keyup / キーリピート経由の flip を抑止
+        var originalOnKeyTouch = I.KeyObserver.onKeyTouch;
+        I.KeyObserver.onKeyTouch = function (Eve) {
+            if (isFlipArrow(Eve) && !Eve.__episodeNavFlip) return false;
+            return originalOnKeyTouch.call(I.KeyObserver, Eve);
+        };
+
+        // 1 押下 1 flip: 最初の keydown でだけ flip する。
+        // キーリピートの検出は Eve.repeat ではなく自前の押下管理で行う
+        // （リモコンによっては repeat フラグを立てずにリピートを送るため）
+        var pressedArrows = {};
+        E.bind('bibi:downed-key', function (Eve) {
+            if (!isFlipArrow(Eve)) return;
+            if (pressedArrows[Eve.key]) return;
+            pressedArrows[Eve.key] = true;
+            Eve.__episodeNavFlip = true;
             I.KeyObserver.onKeyTouch(Eve);
-        }
+        });
+        E.bind('bibi:upped-key', function (Eve) {
+            delete pressedArrows[Eve.key];
+        });
     });
 
     // URL パラメータの book からサイト種別・小説ID・エピソードIDを取得
