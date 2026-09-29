@@ -158,7 +158,7 @@ wheels = [
 [[package]]
 name = "nepub"
 version = "1.5.0"
-source = { git = "https://github.com/ttk1/nepub.git#72dc192c7c316e58a4485661dd664da76e292dab" }
+source = { git = "https://github.com/ttk1/nepub.git?rev=72dc192c7c316e58a4485661dd664da76e292dab#72dc192c7c316e58a4485661dd664da76e292dab" }
 dependencies = [
     { name = "jinja2" },
 ]
@@ -175,7 +175,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "flask", specifier = ">=3.0.0" },
-    { name = "nepub", git = "https://github.com/ttk1/nepub.git" },
+    { name = "nepub", git = "https://github.com/ttk1/nepub.git?rev=72dc192c7c316e58a4485661dd664da76e292dab" },
 ]
 
 [[package]]
