@@ -8,49 +8,13 @@ import tempfile
 import urllib.error
 import zipfile
 from pathlib import Path
+from typing import Callable
 
-from flask import (
-    Flask,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    send_from_directory,
-)
-from nepub.epub import container, content, nav, text
+from flask import Flask, jsonify, redirect, render_template, request, send_file
+from nepub.epub import container, content, nav, style, text
 from nepub.http import get
 from nepub.parser.kakuyomu import KakuyomuEpisodeParser
 from nepub.parser.narou import NarouEpisodeParser
-from werkzeug.security import safe_join
-
-
-def style() -> str:
-    """カスタムスタイルシート（行間を調整）"""
-    return """body {
-	writing-mode: vertical-rl;
-	-webkit-writing-mode: vertical-rl;
-	-epub-writing-mode: vertical-rl;
-	line-height: 1.7;
-}
-
-h1 {
-	text-align: center;
-	margin-top: 2em;
-	margin-bottom: 2em;
-}
-
-p {
-	margin: 0;
-	padding: 0;
-}
-
-span.tcy {
-	writing-mode: horizontal-tb;
-	-webkit-writing-mode: horizontal-tb;
-	-epub-writing-mode: horizontal-tb;
-	line-height: 1;
-}
-"""
 
 
 # ロギング設定
@@ -61,26 +25,49 @@ logging.basicConfig(
 # プロジェクトルート
 PROJECT_ROOT = Path(__file__).parent.parent
 
-app = Flask(__name__, static_folder=None)
+# static/ には画面の JS と同梱の epub-viewer（static/epub-viewer/）を置く
+app = Flask(__name__)
+
+
+# epub-viewer は書籍の各ページ・画像・CSS・フォントを blob: URL で表示するので、
+# それらの blob: と（書籍内の）data: を許可する。スクリプトは static/ のファイルだけ
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' blob:",
+        "img-src 'self' blob: data:",
+        "font-src 'self' blob: data:",
+        "media-src blob: data:",
+        "frame-src blob:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+    ]
+)
 
 
 @app.after_request
 def set_security_headers(response):
     """全レスポンスにセキュリティヘッダーを付与"""
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
     return response
 
 
-# Bibi の静的ファイルパス
-BIBI_DIR = PROJECT_ROOT / "bibi"
-BOOKSHELF_DIR = PROJECT_ROOT / "bibi-bookshelf"
-
 # EPUB キャッシュディレクトリ（サイトごとに分離）
-NAROU_CACHE_DIR = BOOKSHELF_DIR / "narou"
+CACHE_DIR = PROJECT_ROOT / "epub-cache"
+NAROU_CACHE_DIR = CACHE_DIR / "narou"
 NAROU_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-KAKUYOMU_CACHE_DIR = BOOKSHELF_DIR / "kakuyomu"
+KAKUYOMU_CACHE_DIR = CACHE_DIR / "kakuyomu"
 KAKUYOMU_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# 作品 ID・エピソードの形式（サイトごと）
+NAROU_ID_PATTERN = re.compile(r"[a-zA-Z0-9]{1,20}")
+KAKUYOMU_ID_PATTERN = re.compile(r"[0-9]{1,30}")
+NAROU_EPISODE_PATTERN = re.compile(r"[1-9][0-9]{0,4}")  # 先頭の 0 は不可（同じ話の URL・キャッシュを 1 つにするため）
+MAX_NAROU_EPISODE = 10000
 
 # なろうURLパース用の正規表現
 NAROU_URL_PATTERN = re.compile(
@@ -98,7 +85,8 @@ def parse_narou_url(url: str) -> tuple[str | None, int | None]:
     match = NAROU_URL_PATTERN.match(url.strip())
     if not match:
         return None, None
-    novel_id = match.group(1)
+    # なろうの作品 ID は大文字・小文字を区別しないので、キャッシュ・履歴が分かれないよう小文字にそろえる
+    novel_id = match.group(1).lower()
     episode = int(match.group(2)) if match.group(2) else None
     return novel_id, episode
 
@@ -180,53 +168,76 @@ def get_kakuyomu_cache_path(work_id: str, episode_id: str) -> Path:
     return KAKUYOMU_CACHE_DIR / f"{work_id}_{episode_id}.epub"
 
 
+def get_kakuyomu_nav_path(work_id: str, episode_id: str) -> Path:
+    """カクヨムの前後の話の ID の保存先（EPUB とは別に持ち、次話の公開時にこれだけ更新する）"""
+    return get_kakuyomu_cache_path(work_id, episode_id).with_suffix(".nav.json")
+
+
+def kakuyomu_episode_url(work_id: str, episode_id: str) -> str:
+    return f"https://kakuyomu.jp/works/{work_id}/episodes/{episode_id}"
+
+
+def parse_episode(
+    url: str, parser, clean_novel_title: Callable[[str, str], str]
+) -> tuple[str, str]:
+    """話のページを取得して parser に読ませ、(ページの HTML, 作品名) を返す
+
+    作品名はページの <title> から clean_novel_title で取り出す（取れなければ空文字）。
+    """
+    html_content = get(url)
+    parser.feed(html_content)
+
+    # 本文が取れていない（ページ構造の変更・削除済み作品など）場合は
+    # 壊れた EPUB をキャッシュしないように失敗させる
+    if not parser.paragraphs:
+        raise ValueError("本文を抽出できませんでした")
+
+    # <title> には話タイトルも入っているので、tcy 加工前の話タイトル
+    # （nepub のパーサーの内部属性）を使って作品名だけ取り出す
+    page_title = extract_page_title(html_content)
+    raw_episode_title = str(getattr(parser, "_title", "")).strip()
+    novel_title = clean_novel_title(page_title, raw_episode_title) if page_title else ""
+    # nepub のテンプレートはエスケープしない（パーサーがエスケープ済みの値を返す）ので揃える
+    return html_content, html.escape(novel_title)
+
+
 def build_epub(
     cache_path: Path,
     novel_title: str,
     episode_id: str,
-    episode_title: str,
-    paragraphs: list,
-    images: list,
+    parser,
     metadata: dict,
-) -> Path:
-    """EPUB ファイルを生成して cache_path に保存"""
+) -> None:
+    """パース済みの 1 話分から EPUB を生成して cache_path に保存"""
     timestamp = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-
+    episode_title = parser.title
     episodes = [
         {
             "id": episode_id,
             "title": episode_title,
-            "paragraphs": paragraphs,
+            "paragraphs": parser.paragraphs,
             "fetched": True,
         }
     ]
-
     chapters = [{"name": "default", "episodes": episodes}]
 
-    # 画像の重複除去
-    unique_images = []
-    image_ids = set()
-    for image in images:
-        if image["id"] not in image_ids:
-            image_ids.add(image["id"])
-            unique_images.append(
-                {
-                    "id": image["id"],
-                    "name": image["name"],
-                    "type": image["type"],
-                }
-            )
-
+    # 画像の重複除去（同じ挿絵が複数回出てくることがある）
+    images = list({image["id"]: image for image in parser.images}.values())
+    image_metadata = [
+        {"id": image["id"], "name": image["name"], "type": image["type"]}
+        for image in images
+    ]
     metadata["episodes"] = {
         episode_id: {
             "id": episode_id,
             "title": episode_title,
             "created_at": "",
             "updated_at": "",
-            "images": unique_images,
+            "images": image_metadata,
         }
     }
 
+    # 書きかけのファイルがキャッシュとして使われないよう、一時ファイルに書いてから置き換える
     tmp_file = tempfile.NamedTemporaryFile(
         prefix=f"{cache_path.stem}_",
         suffix=".epub",
@@ -245,134 +256,71 @@ def build_epub(
                 zf.writestr("src/style.css", style())
                 zf.writestr(
                     "src/content.opf",
-                    content(novel_title, "", timestamp, episodes, unique_images),
+                    content(novel_title, "", timestamp, episodes, image_metadata),
                 )
                 zf.writestr("src/navigation.xhtml", nav(chapters))
                 zf.writestr("src/metadata.json", json.dumps(metadata))
                 zf.writestr(
                     f"src/text/{episode_id}.xhtml",
-                    text(episode_title, paragraphs),
+                    text(episode_title, parser.paragraphs),
                 )
                 for image in images:
-                    if image["id"] in image_ids:
-                        zf.writestr(f"src/image/{image['name']}", image["data"])
+                    zf.writestr(f"src/image/{image['name']}", image["data"])
         Path(tmp_file.name).replace(cache_path)
     except BaseException:
         Path(tmp_file.name).unlink(missing_ok=True)
         raise
-    return cache_path
 
 
 def generate_narou_epub(novel_id: str, episode_num: int) -> Path:
-    """なろうのエピソードからEPUBを生成（1話単位）"""
+    """なろうの 1 話分の EPUB を生成（キャッシュがあればそれを使う）"""
     cache_path = get_narou_cache_path(novel_id, episode_num)
-
     if cache_path.exists():
         return cache_path
 
-    episode_url = f"https://ncode.syosetu.com/{novel_id}/{episode_num}/"
-    html_content = get(episode_url)
-
     parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
-    parser.feed(html_content)
-
-    # 本文が取れていない（ページ構造の変更・削除済み作品など）場合は
-    # 壊れた EPUB をキャッシュしないように失敗させる
-    if not parser.paragraphs:
-        raise ValueError("本文を抽出できませんでした")
-
-    # <title> は「作品名 - エピソード名」形式なので、パース済みの
-    # エピソード名（tcy 加工前の生テキスト）を使って作品名だけ取り出す
-    page_title = extract_page_title(html_content)
-    raw_episode_title = str(getattr(parser, "_title", "")).strip()
-    novel_title = (
-        html.escape(clean_narou_novel_title(page_title, raw_episode_title))
-        if page_title
-        else novel_id
+    _, novel_title = parse_episode(
+        f"https://ncode.syosetu.com/{novel_id}/{episode_num}/",
+        parser,
+        clean_narou_novel_title,
     )
-
-    episode_id = str(episode_num)
-    metadata = {
-        "novel_id": novel_id,
-        "kakuyomu": False,
-        "illustration": True,
-        "tcy": True,
-    }
-
-    return build_epub(
-        cache_path,
-        novel_title,
-        episode_id,
-        parser.title,
-        parser.paragraphs,
-        parser.images,
-        metadata,
-    )
+    metadata = {"novel_id": novel_id, "kakuyomu": False, "illustration": True, "tcy": True}
+    build_epub(cache_path, novel_title or novel_id, str(episode_num), parser, metadata)
+    return cache_path
 
 
 def generate_kakuyomu_epub(
     work_id: str, episode_id: str
 ) -> tuple[Path, str | None, str | None]:
-    """カクヨムのエピソードからEPUBを生成（1話単位）
+    """カクヨムの 1 話分の EPUB を生成（キャッシュがあればそれを使う）
 
     Returns:
         (cache_path, prev_episode_id, next_episode_id)
     """
     cache_path = get_kakuyomu_cache_path(work_id, episode_id)
-    nav_path = cache_path.with_suffix(".nav.json")
-
-    # キャッシュがあればナビゲーション情報も読み込んで返す
+    nav_path = get_kakuyomu_nav_path(work_id, episode_id)
     if cache_path.exists() and nav_path.exists():
         nav_data = json.loads(nav_path.read_text(encoding="utf-8"))
         return cache_path, nav_data.get("prev"), nav_data.get("next")
 
-    episode_url = f"https://kakuyomu.jp/works/{work_id}/episodes/{episode_id}"
-    html_content = get(episode_url)
-
     parser = KakuyomuEpisodeParser(convert_tcy=True)
-    parser.feed(html_content)
-
-    # 本文が取れていない（ページ構造の変更・削除済み作品など）場合は
-    # 壊れた EPUB をキャッシュしないように失敗させる
-    if not parser.paragraphs:
-        raise ValueError("本文を抽出できませんでした")
-
-    # <title> は「エピソード名 - 作品名（作者名） - カクヨム」形式なので、
-    # パース済みのエピソード名（tcy 加工前の生テキスト）を使って作品名だけ取り出す
-    page_title = extract_page_title(html_content)
-    raw_episode_title = str(getattr(parser, "_title", "")).strip()
-    novel_title = (
-        html.escape(clean_kakuyomu_novel_title(page_title, raw_episode_title))
-        if page_title
-        else work_id
+    html_content, novel_title = parse_episode(
+        kakuyomu_episode_url(work_id, episode_id), parser, clean_kakuyomu_novel_title
     )
+    metadata = {"novel_id": work_id, "kakuyomu": True, "illustration": False, "tcy": True}
+    build_epub(cache_path, novel_title or work_id, episode_id, parser, metadata)
 
-    # 前後のエピソードIDを抽出
-    prev_ep_id, next_ep_id = extract_kakuyomu_adjacent_episodes(html_content)
+    prev_id, next_id = extract_kakuyomu_adjacent_episodes(html_content)
+    save_kakuyomu_nav(work_id, episode_id, prev_id, next_id)
+    return cache_path, prev_id, next_id
 
-    metadata = {
-        "novel_id": work_id,
-        "kakuyomu": True,
-        "illustration": False,
-        "tcy": True,
-    }
 
-    build_epub(
-        cache_path,
-        novel_title,
-        episode_id,
-        parser.title,
-        parser.paragraphs,
-        [],
-        metadata,
+def save_kakuyomu_nav(
+    work_id: str, episode_id: str, prev_id: str | None, next_id: str | None
+) -> None:
+    get_kakuyomu_nav_path(work_id, episode_id).write_text(
+        json.dumps({"prev": prev_id, "next": next_id}), encoding="utf-8"
     )
-
-    # ナビゲーション情報を別ファイルに保存（キャッシュヒット時も参照できるように）
-    nav_path.write_text(
-        json.dumps({"prev": prev_ep_id, "next": next_ep_id}), encoding="utf-8"
-    )
-
-    return cache_path, prev_ep_id, next_ep_id
 
 
 @app.route("/")
@@ -407,151 +355,80 @@ def go():
     return "無効なURLです。小説家になろうまたはカクヨムのURLを入力してください。", 400
 
 
-@app.route("/read/narou/<novel_id>/<int:episode>")
-def read_narou_episode(novel_id: str, episode: int):
-    """なろうのエピソードを Bibi で表示"""
-    if not re.match(r"^[a-zA-Z0-9]+$", novel_id) or len(novel_id) > 20:
-        return "無効な小説IDです", 400
-    if episode < 1 or episode > 10000:
-        return "エピソード番号は1〜10000の範囲で指定してください", 400
-
-    try:
-        generate_narou_epub(novel_id, episode)
-    except urllib.error.HTTPError as e:
-        logging.error(
-            f"エピソード取得エラー: novel_id={novel_id}, episode={episode}, status={e.code}"
+def is_valid_episode(site: str, novel_id: str, episode: str) -> bool:
+    """作品 ID・エピソードがサイトごとの形式に合っているか"""
+    if site == "narou":
+        return bool(
+            NAROU_ID_PATTERN.fullmatch(novel_id)
+            and NAROU_EPISODE_PATTERN.fullmatch(episode)
+            and int(episode) <= MAX_NAROU_EPISODE
         )
+    if site == "kakuyomu":
+        return bool(
+            KAKUYOMU_ID_PATTERN.fullmatch(novel_id)
+            and KAKUYOMU_ID_PATTERN.fullmatch(episode)
+        )
+    return False
+
+
+@app.route("/read/<site>/<novel_id>/<episode>")
+def read_episode(site: str, novel_id: str, episode: str):
+    """リーダー画面（EPUB の取得と話の移動は static/reader.js が行う）"""
+    if not is_valid_episode(site, novel_id, episode):
+        return "無効な URL です", 404
+    return render_template("reader.html")
+
+
+@app.route("/epub/<site>/<novel_id>/<episode>")
+def episode_epub(site: str, novel_id: str, episode: str):
+    """1 話分の EPUB を返す（なければ取得・生成してキャッシュする）
+
+    カクヨムは前後の話の ID をヘッダーで返す（なろうは話数 ±1 なので不要）。
+    """
+    if not is_valid_episode(site, novel_id, episode):
+        return "無効な URL です", 404
+    target = f"{site}/{novel_id}/{episode}"
+    headers = {}
+    try:
+        if site == "narou":
+            path = generate_narou_epub(novel_id, int(episode))
+        else:
+            path, prev_id, next_id = generate_kakuyomu_epub(novel_id, episode)
+            headers = {"X-Prev-Episode": prev_id or "", "X-Next-Episode": next_id or ""}
+    # HTTPError は IOError のサブクラスなので先に捕まえる
+    except urllib.error.HTTPError as e:
+        logging.error(f"エピソード取得エラー: {target}, status={e.code}")
         if e.code == 404:
-            return "エピソードが見つかりませんでした。URLを確認してください。", 404
+            return "エピソードが見つかりませんでした", 404
         return "エピソードの取得に失敗しました", 502
     except (IOError, ValueError) as e:
-        logging.error(
-            f"EPUB生成エラー: novel_id={novel_id}, episode={episode}, error={e}"
-        )
-        return "EPUB の生成に失敗しました。URLを確認してください。", 500
+        logging.error(f"EPUB生成エラー: {target}, error={e}")
+        return "EPUB の生成に失敗しました", 500
     except Exception:
-        logging.exception(f"予期しないエラー: novel_id={novel_id}, episode={episode}")
+        logging.exception(f"予期しないエラー: {target}")
         return "EPUB の生成に失敗しました", 500
 
-    epub_filename = f"{novel_id}_{episode}.epub"
-    return redirect(f"/bibi/index.html?book=narou/{epub_filename}")
-
-
-@app.route("/read/kakuyomu/<work_id>/<episode_id>")
-def read_kakuyomu_episode(work_id: str, episode_id: str):
-    """カクヨムのエピソードを Bibi で表示"""
-    if not re.match(r"^\d+$", work_id) or len(work_id) > 30:
-        return "無効な作品IDです", 400
-    if not re.match(r"^\d+$", episode_id) or len(episode_id) > 30:
-        return "無効なエピソードIDです", 400
-
-    try:
-        _, prev_ep, next_ep = generate_kakuyomu_epub(work_id, episode_id)
-    except urllib.error.HTTPError as e:
-        logging.error(
-            f"エピソード取得エラー: work_id={work_id}, episode_id={episode_id}, status={e.code}"
-        )
-        if e.code == 404:
-            return "エピソードが見つかりませんでした。URLを確認してください。", 404
-        return "エピソードの取得に失敗しました", 502
-    except (IOError, ValueError) as e:
-        logging.error(
-            f"EPUB生成エラー: work_id={work_id}, episode_id={episode_id}, error={e}"
-        )
-        return "EPUB の生成に失敗しました。URLを確認してください。", 500
-    except Exception:
-        logging.exception(
-            f"予期しないエラー: work_id={work_id}, episode_id={episode_id}"
-        )
-        return "EPUB の生成に失敗しました", 500
-
-    epub_filename = f"{work_id}_{episode_id}.epub"
-    url = f"/bibi/index.html?book=kakuyomu/{epub_filename}"
-    if prev_ep:
-        url += f"&prev={prev_ep}"
-    if next_ep:
-        url += f"&next={next_ep}"
-    return redirect(url)
+    response = send_file(path, mimetype="application/epub+zip")
+    response.headers.update(headers)
+    return response
 
 
 @app.route("/api/kakuyomu/next-episode/<work_id>/<episode_id>")
 def check_kakuyomu_next_episode(work_id: str, episode_id: str):
     """カクヨムの最新話チェック: 現在のエピソードページを再取得して次話の有無を確認"""
-    if not re.match(r"^\d+$", work_id) or len(work_id) > 30:
-        return jsonify({"error": "無効な作品IDです"}), 400
-    if not re.match(r"^\d+$", episode_id) or len(episode_id) > 30:
-        return jsonify({"error": "無効なエピソードIDです"}), 400
+    if not is_valid_episode("kakuyomu", work_id, episode_id):
+        return jsonify({"error": "無効な URL です"}), 404
 
     try:
-        episode_url = f"https://kakuyomu.jp/works/{work_id}/episodes/{episode_id}"
-        html_content = get(episode_url)
-        _, next_id = extract_kakuyomu_adjacent_episodes(html_content)
-
-        if next_id:
-            # 次話が見つかった場合、古いキャッシュを削除して次回生成時に正しいメタデータが入るようにする
-            cache_path = get_kakuyomu_cache_path(work_id, episode_id)
-            if cache_path.exists():
-                cache_path.unlink()
-            nav_path = cache_path.with_suffix(".nav.json")
-            if nav_path.exists():
-                nav_path.unlink()
-
-            return jsonify({"next_episode_id": next_id})
-        else:
-            return jsonify({"next_episode_id": None})
+        html_content = get(kakuyomu_episode_url(work_id, episode_id))
     except Exception:
-        logging.exception(
-            f"最新話チェックエラー: work_id={work_id}, episode_id={episode_id}"
-        )
-        return jsonify({"error": "チェックに失敗しました"}), 500
+        logging.exception(f"最新話チェックエラー: kakuyomu/{work_id}/{episode_id}")
+        return jsonify({"error": "最新話の確認に失敗しました"}), 500
 
-
-@app.route("/bibi/<path:filename>")
-def serve_bibi(filename: str):
-    """Bibi の静的ファイルを配信"""
-    return send_from_directory(BIBI_DIR, filename)
-
-
-@app.route("/bibi-bookshelf/<path:filename>")
-def serve_bookshelf(filename: str):
-    """既存の bookshelf ファイルを配信
-
-    Bibi が suffix range (bytes=-N) でファイルサイズより大きな値を要求すると、
-    Flask/Werkzeug が 416 Range Not Satisfiable を返してしまう問題への対策を含む。
-    """
-    range_header = request.headers.get("Range", "")
-
-    # suffix range (bytes=-N) 以外は通常処理
-    if not range_header.startswith("bytes=-"):
-        return send_from_directory(BOOKSHELF_DIR, filename)
-
-    # Range ヘッダーのパース
-    try:
-        suffix_length = int(range_header[7:])
-    except ValueError:
-        return "Invalid Range header", 400
-
-    # パストラバーサル対策
-    safe_path = safe_join(str(BOOKSHELF_DIR), filename)
-    if not safe_path:
-        return "Invalid path", 400
-
-    # ファイル存在チェック
-    if not os.path.isfile(safe_path):
-        return "Not found", 404
-
-    # suffix_length がファイルサイズ未満なら通常の Range 処理で OK
-    file_size = os.path.getsize(safe_path)
-    if suffix_length < file_size:
-        return send_from_directory(BOOKSHELF_DIR, filename)
-
-    # suffix_length >= file_size の場合、Flask が 416 を返すのを回避
-    # ファイル全体を 206 Partial Content で返す
-    response = send_from_directory(BOOKSHELF_DIR, filename, conditional=False)
-    response.status_code = 206
-    response.headers["Content-Range"] = f"bytes 0-{file_size - 1}/{file_size}"
-    response.headers["Accept-Ranges"] = "bytes"
-    return response
+    # 前後の話の情報だけ最新にする（本文の EPUB はそのまま使える）
+    prev_id, next_id = extract_kakuyomu_adjacent_episodes(html_content)
+    save_kakuyomu_nav(work_id, episode_id, prev_id, next_id)
+    return jsonify({"next_episode_id": next_id})
 
 
 def main():
