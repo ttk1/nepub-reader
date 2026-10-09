@@ -16,7 +16,7 @@ export interface ReaderOptions {
     storageKey: string;
     /** Initial settings, used until the user changes them. */
     settings: Partial<ReaderSettings>;
-    /** Other EpubViewer options (e.g. `keyboard`, `cooldown`). Look-related ones come from the settings. */
+    /** Other EpubViewer options (e.g. `keyboard`, `wheel`, `cooldown`). Look-related ones come from the settings. */
     viewer: Partial<ViewerOptions>;
 }
 export interface OpenOptions {

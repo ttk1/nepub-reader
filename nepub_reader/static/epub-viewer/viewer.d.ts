@@ -43,8 +43,10 @@ export interface ViewerOptions {
     maxWidth: number;
     /** Turn pages with ←/→, ↑/↓, PageUp/PageDown and Space pressed anywhere in the host window. */
     keyboard: boolean;
+    /** Turn pages with the mouse wheel / trackpad over the viewer: one page per wheel gesture. */
+    wheel: boolean;
     /**
-     * Page-turn keys and clicks within this many ms of the previous accepted one are ignored, so that
+     * Page-turn keys, clicks and wheel gestures within this many ms of the previous accepted one are ignored, so that
      * chattering (e.g. remote controls) does not skip pages. Keep it short so fast deliberate presses still work.
      */
     cooldown: number;
@@ -80,7 +82,7 @@ export interface EpubViewerEventMap {
     link: CustomEvent<{
         href: string;
     }>;
-    /** A page turn by key or click failed (e.g. a broken section). Calls from code reject instead. */
+    /** A page turn by key, click or wheel failed (e.g. a broken section). Calls from code reject instead. */
     error: CustomEvent<{
         error: unknown;
     }>;

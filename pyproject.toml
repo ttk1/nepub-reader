@@ -3,10 +3,10 @@ name = "nepub-reader"
 version = "0.1.0"
 description = "小説家になろう・カクヨムの作品を縦書き表示で快適に読めるリーダー"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0.0",
-    "nepub @ git+https://github.com/ttk1/nepub.git@b1cf63d93d7280b37098f764ee8db64e6afb94cb",
+    "nepub @ git+https://github.com/ttk1/nepub.git@f26449487b0c19e450e857d13943e0edaf251bc6",
 ]
 
 [project.scripts]
