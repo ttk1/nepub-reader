@@ -220,7 +220,11 @@ export class EpubViewer extends EventTarget {
         // The html element is the multi-column container. Padding m + column gap 2m makes every
         // column (= page) start exactly at a multiple of the page size.
         this.#style.textContent = `
-      html { line-height: 1.6; } /* default only; the book's own CSS wins */
+      /* Defaults only; the book's own CSS wins. A line longer than a page would run into the
+         next page, so break runs without break opportunities (e.g. "……" × 100) where they
+         overflow, and wrap preformatted text. */
+      html { line-height: 1.6; overflow-wrap: break-word; }
+      pre { white-space: pre-wrap; }
       html {
         writing-mode: ${this.#writingMode} !important;
         box-sizing: border-box !important;
