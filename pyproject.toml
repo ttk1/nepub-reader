@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0.0",
-    "nepub @ git+https://github.com/ttk1/nepub.git@f26449487b0c19e450e857d13943e0edaf251bc6",
+    "nepub @ git+https://github.com/ttk1/nepub.git@382ffea7c1fd121ea20e62d7129087726120a703",
 ]
 
 [project.scripts]
