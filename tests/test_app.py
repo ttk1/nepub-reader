@@ -33,6 +33,7 @@ class PagesTest(AppTestCase):
             body = self.client.get(page).get_data(as_text=True)
             self.assertIn('<link rel="manifest" href="/static/manifest.json">', body)
             self.assertIn('<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">', body)
+            self.assertIn('<link rel="icon" href="/static/icon.svg" type="image/svg+xml">', body)
         res = self.client.get("/static/manifest.json")
         manifest = res.get_json()
         res.close()

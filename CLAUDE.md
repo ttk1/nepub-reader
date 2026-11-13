@@ -20,7 +20,7 @@
 | `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
 | `nepub_reader/static/sites.js` | 元サイトの名前と、作品・話のページの URL（トップページとリーダーで共有） |
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
-| `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | ホーム画面に追加したときのアイコンと全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
+| `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | アイコン（ブラウザのタブと、ホーム画面に追加したとき）と全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
 | `tests/` | サーバーのテスト（`test_*.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）と、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
 | `.github/workflows/test.yml` | push と PR のたびに、サーバーのテストと読書履歴のテストを GitHub Actions で実行する |
