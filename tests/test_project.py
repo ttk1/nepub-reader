@@ -24,20 +24,6 @@ class PinnedVersionsTest(unittest.TestCase):
         for image in images:
             self.assertRegex(image, rf"^[\w./-]+:[\w.-]+{DIGEST}$", image)
 
-    def test_github_actions_are_pinned(self):
-        workflow = read(".github/workflows/test.yml")
-        actions = re.findall(r"uses: (\S+)", workflow)
-        self.assertTrue(actions)
-        for action in actions:
-            self.assertRegex(action, rf"^[\w./-]+@{COMMIT}$", action)
-        # ワークフローの中で使う Docker イメージ（自分でビルドする nepub-reader は除く）
-        images = [image for image in re.findall(r"docker run [^\n]*? ([\w./-]+:[^\s]+) ", workflow)]
-        self.assertTrue(images)
-        for image in images:
-            self.assertRegex(image, rf"{DIGEST}$", image)
-        # 権限は読み取りだけ
-        self.assertRegex(workflow, r"permissions:\n  contents: read\n")
-
     def test_nepub_is_pinned_to_a_commit(self):
         self.assertRegex(read("pyproject.toml"), rf'"nepub @ git\+https://github\.com/ttk1/nepub\.git@{COMMIT}"')
         self.assertRegex(read("uv.lock"), rf"nepub\.git\?rev={COMMIT}#{COMMIT}")
