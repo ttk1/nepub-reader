@@ -237,6 +237,7 @@ viewer.addEventListener('relocate', () => {
   relayout = false
   savePosition(site, novelId, current.episode, viewer.location)
 })
-viewer.addEventListener('error', (e) => setStatus(`ページを表示できませんでした: ${e.detail.error}`))
+// ページ送りや書籍内のリンクでの移動に失敗した（EpubViewer のエラーは英語なので、何が起きたかを前に付ける）
+viewer.addEventListener('error', (e) => setStatus(`ページを表示できませんでした（${e.detail.error?.message ?? e.detail.error}）`))
 
 start()
