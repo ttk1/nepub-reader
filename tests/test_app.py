@@ -27,6 +27,21 @@ class PagesTest(AppTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn('id="history-list"', res.get_data(as_text=True))
 
+    def test_manifest_and_icons(self):
+        # ホーム画面に追加したときのアイコンと、全画面での表示
+        for page in ["/", "/read/narou/n1234ab/1"]:
+            body = self.client.get(page).get_data(as_text=True)
+            self.assertIn('<link rel="manifest" href="/static/manifest.json">', body)
+            self.assertIn('<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">', body)
+        res = self.client.get("/static/manifest.json")
+        manifest = res.get_json()
+        res.close()
+        self.assertEqual((manifest["start_url"], manifest["display"]), ("/", "standalone"))
+        for icon in [*manifest["icons"], {"src": "/static/apple-touch-icon.png"}]:
+            res = self.client.get(icon["src"])
+            self.assertEqual(res.status_code, 200, icon["src"])
+            res.close()
+
     def test_security_headers(self):
         res = self.client.get("/")
         csp = res.headers["Content-Security-Policy"]

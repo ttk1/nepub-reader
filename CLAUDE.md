@@ -19,6 +19,7 @@
 | `nepub_reader/static/theme.js` | ページのテーマを、リーダーで選んだテーマに合わせる（描画前に動かすので通常のスクリプト）。トップページの配色と、リーダーの準備ができるまでの背景に使う |
 | `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
+| `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | ホーム画面に追加したときのアイコンと全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
 | `tests/` | サーバーのテスト（`test_*.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）と、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
@@ -97,6 +98,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
 - **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
 - **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 500ms になる（約 3 割）。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す。
+- **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
 - **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。
