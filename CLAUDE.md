@@ -15,7 +15,7 @@
 | `nepub_reader/app.py` | サーバー。ルーティングとセキュリティヘッダーだけを持つ |
 | `nepub_reader/episodes.py` | 話の取得と EPUB 生成（nepub）、キャッシュ、元サイトの URL の解釈。Flask には依存しない |
 | `nepub_reader/templates/` | トップページ（`index.html`）とリーダー画面（`reader.html`）の HTML。CSS と JS は `static/` に置く |
-| `nepub_reader/static/index.js` / `index.css` | トップページ。読書履歴の一覧・削除・インポート・エクスポート |
+| `nepub_reader/static/index.js` / `index.css` | トップページ。直前に読んでいた作品（続きを読む）と、読書履歴の一覧・絞り込み・削除・インポート・エクスポート |
 | `nepub_reader/static/theme.js` | ページのテーマを、リーダーで選んだテーマに合わせる（描画前に動かすので通常のスクリプト）。トップページの配色と、リーダーの準備ができるまでの背景に使う |
 | `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
 | `nepub_reader/static/sites.js` | 元サイトの名前と、作品・話のページの URL（トップページとリーダーで共有） |
@@ -23,7 +23,6 @@
 | `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | アイコン（ブラウザのタブと、ホーム画面に追加したとき）と全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
 | `tests/` | サーバーのテスト（`test_app.py`・`test_episodes.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）、別々のファイルに書いた同じ値がそろっていることのテスト（`test_static.py`）、サプライチェーン対策などの約束ごとが守られていることのテスト（`test_project.py`）、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
-| `.github/workflows/test.yml` | push と PR のたびに、サーバーのテストと読書履歴のテストを GitHub Actions で実行する |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
 
 ルート: `/read/<site>/<作品 ID>/<話>` がリーダー画面、`/epub/<site>/<作品 ID>/<話>` が 1 話分の EPUB、`/api/kakuyomu/next-episode/...` がカクヨムの最新話の再確認、`/go?url=` が元サイトの URL からリーダー画面への移動。`<話>` はなろうなら話数、カクヨムならエピソード ID。
@@ -44,7 +43,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 ## 毎回のチェックリスト（変更を終える前に必ず確認）
 
 1. **動作確認**: テストを通す。サーバーや読書履歴（`history.js`）の挙動を変えたらテストも足す（テスト用の依存は増やさず、`unittest` と Node.js 標準のテストランナーで書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
-2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check`（`python` のイメージに `pip install ruff` して実行。ルールは `pyproject.toml` の `[tool.ruff]` で固定している。ruff の版によって既定のルールが変わるため）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。いまは指摘が 0 件になるようにしてある（DOM の要素の型は、必要なところに JSDoc で書いている）ので、指摘が出たら直す。
+2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check --no-cache .`（Dockerfile の `FROM` と同じ python のイメージを digest 付きで使い、リポジトリを読み取り専用でマウントして、その中で `pip install ruff` して実行する。タグだけの `python:3` などは使わない。`--no-cache` は、読み取り専用のマウントにキャッシュを書こうとして失敗するのを避けるため。ルールは `pyproject.toml` の `[tool.ruff]` で固定している。ruff の版によって既定のルールが変わるため）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。いまは指摘が 0 件になるようにしてある（DOM の要素の型は、必要なところに JSDoc で書いている）ので、指摘が出たら直す。
 3. **冗長さ・可読性**: 差分を読み返し、使われていないコード・重複・分かりにくい名前がないか確認する。コメントは「なぜ」を書く。構造はシンプルに保つ。
 4. **ドキュメント**: 操作方法や起動方法を変えたら README.md を更新する。このファイルも「このファイルの運用」に従って更新する。Markdown の文は途中で改行しない（日本語では改行が余分な空白として表示されるため）。
 5. **依存を増やさない**: 追加が必要なら「サプライチェーン対策」の手順に従う。
@@ -57,12 +56,12 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ## サプライチェーン対策
 
-イメージの digest、アクションのコミット、nepub のコミット、依存が `flask` と `nepub` だけであること、Dockerfile が COPY するものが `.dockerignore` を通ることは、`tests/test_project.py` が確かめている。
+イメージの digest、nepub のコミット、依存が `flask` と `nepub` だけであること、Dockerfile が COPY するものが `.dockerignore` を通ることは、`tests/test_project.py` が確かめている。
 
 - Python の依存は `flask` と `nepub` のみ。`uv.lock` をコミットし、PyPI のパッケージはハッシュで固定する。nepub は `pyproject.toml` でも git のコミットを指定する（`uv lock --upgrade` で未確認の最新コミットに上がらないように）。ビルドは `uv sync --frozen`。
 - `uv.lock` の更新はホストで行わず、Dockerfile と同じ python・uv のイメージに git を入れた一時イメージで、リポジトリをマウントして `uv lock` を実行する。
-- Docker イメージ（python・uv、GitHub Actions で使う node）はバージョンと digest（`@sha256:...`）で固定する。
-- GitHub Actions のアクションは、タグではなくコミット（40 桁の SHA）で固定し、どの版かをコメントに書く。コミットは `https://api.github.com/repos/<owner>/<repo>/commits/<タグ>` の `sha` で確かめる。ワークフローの権限は `contents: read` だけにする。
+- Docker イメージ（python・uv）はバージョンと digest（`@sha256:...`）で固定する。
+- GitHub Actions は使わない（自分用で、使う前に手元でテストを通すので。ユーザーの方針）。テストは「コマンド」の手順で、手元の Docker で実行する。
 - 依存とイメージが古くなっていないかは、ときどき確かめる: 固定している版の脆弱性の報告は `https://pypi.org/pypi/<pkg>/<version>/json` の `vulnerabilities`、python のイメージのタグと更新日は `https://hub.docker.com/v2/repositories/library/python/tags?name=3.12.`、uv は GitHub のリリース一覧で分かる。Python 3.12 はセキュリティ修正だけの系列なので、新しい版が出ていたら上げる。
 - Docker Hub の応答には、タグの digest（`digest`）と、アーキテクチャごとのイメージの digest（`images[].digest`）がある。Dockerfile に書くのはタグの digest で、`docker inspect` の `RepoDigests` と一致する。
 - 依存・イメージを追加・更新するときは:
@@ -74,9 +73,9 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ## 同梱の epub-viewer
 
-- 取り込み元: https://github.com/ttk1/epub-viewer の `v2.0.0`（コミット `0dd5780`。リリース前の確認として取り込んだもので、公開時にタグが別のコミットに付いたら、そのコミットで取り込み直してここを更新する）。npm には公開されていないので、ビルド成果物を同梱している。
+- 取り込み元: https://github.com/ttk1/epub-viewer の `v2.0.0`（コミット `2944b60`）。npm には公開されていないので、ビルド成果物を同梱している。
 - 更新手順: epub-viewer でタグをチェックアウトし、`docker compose run --rm node sh -c "npm ci && npm run build"` → `dist/src/` の中身と `LICENSE` を `nepub_reader/static/epub-viewer/` に上書きコピー（消えたファイルは削除）→ 上の取り込み元のタグ・コミットを更新 → 動作確認。
-- API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・スワイプ・ホイール、リモコンのチャタリング対策）と表示設定（テーマ・フォント・行間・表示幅など）は epub-viewer 側の機能なので、こちらで作り直さない。
+- API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・スワイプ・ホイール、リモコンのチャタリング対策）、進捗のスライダー、表示設定（テーマ・フォント・行間・表示幅・余白など）は epub-viewer 側の機能なので、こちらで作り直さない。
 - `reader.js` が使うのは公開 API だけ（`reader.toolbar` と、作品名・話タイトルの表示に使う `.title` 要素も公開 API）。ツールバーのそれ以外の中身には頼らない。
 - 更新時は、前の版が localStorage に保存した設定（`nepub-reader:settings`）がそのまま使えるかも確認する。`theme.js` もこの設定の `theme` を読んでいる。
 - `reader.css` の `height` の `vh` と `dvh` の併記、`overscroll-behavior: none` は epub-viewer の README の勧めに従ったもの。
@@ -101,18 +100,23 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 - **話の移動**: リーダー画面はページを遷移せずに次/前の話を読み込み、URL は `history.replaceState` で書き換える（リロードで同じ話が開く）。`bookend` / `bookstart` はキーを押すたびに発生するので、読み込み中は `loading` で無視する。
 - **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は自動では再確認しない（キーを押すたびに元サイトへアクセスしないように）。知らせの「再確認」ボタンを押したときだけ確かめ直す。再確認そのものが失敗したとき（元サイトの不調など）も同じで、自動では繰り返さず、ボタンでやり直す。
+- **次の話は先に取得しない**: キャッシュにない話へ移るときは元サイトからの取得を待つ（1〜2 秒）。話の終わり近くで次の話を先に取得する案は、不要と決まった（ユーザーの判断。元サイトへのアクセスも増える）。
 - **「読み込み中…」は遅いときだけ**: 話を開くのに 0.3 秒以上かかったときだけ出す（`whileLoading`）。キャッシュ済みの話はすぐ開くので、毎回出すとちらつく。
 - **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。ページをめくると消すが、ツールバーの出し入れでも `relocate` が発生するので、その分は `relayout` で見分けて消さない。
 - **文字サイズの初期値**: EpubReader の既定（45px）は離れて読む大きな画面向けなので、狭い画面（幅か高さが 600px 以下。横向きのスマートフォンを含む）では `settings` オプションで 24px を初期値にしている。利用者が変えた後は、保存された値が使われる。
 - **キー操作**: ページ送りのキーは epub-viewer が受ける。こちらが足したのは N（次の話）と P（前の話）だけ。本文をクリックした後はキーが本文の文書に届くので、`sectionload` で渡される文書にもリスナーを付けている。
-- **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。戻し方の知らせは、初めて隠したとき（この値がまだないとき）だけ出す。
+- **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。戻し方の知らせは、初めて隠したとき（この値がまだないとき）だけ出す。戻し方を忘れても出せるよう、隠している間にマウスを画面の上の端（48px 以内）に寄せると、寄せている間だけツールバーを出す（`reader.js` の `onMouseMove`）。このときはページの上に重ねて出し（`reader.css` の `.peek`）、ページの大きさを変えない（マウスを動かすたびに本文が組み直されないように）。本文の上でのマウスの動きは本文の文書にしか届かないので、`sectionload` の文書でも聞いている。メニューを開いている間は隠さない。タッチ操作では働かせない（`pointerType` が `mouse` のときだけ）。
 - **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるため（遅延 100ms の通信で、最初のページが出るまでが約 100ms 縮む）。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す（テストが、`reader.js` からたどれるモジュールと一覧が一致することを確かめている）。読み込むファイルの数を減らすための細工（CSS の埋め込みなど）はしない。
 
 ### 読書履歴とトップページ
 
-- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。履歴は読むたびに検証し、使えない項目を除く（`getHistory` → `sanitizeHistoryItem`。壊れた項目が 1 つあるだけで、一覧や記録が止まらないように）。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
+- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 1000 件保存する（`MAX_HISTORY`。制限する理由は特になく、保存先の容量に収めるためのゆるい上限）。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。履歴は読むたびに検証し、使えない項目を除く（`getHistory` → `sanitizeHistoryItem`。壊れた項目が 1 つあるだけで、一覧や記録が止まらないように）。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
 - **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
+- **トップページの構成**: いちばん新しい履歴を「続きを読む」のカードにし（作品名を縦書きにした表紙ふうの札と、その話の読書位置 `position.progress` の線を付ける）、残りを一覧にする。一覧は 30 件ずつ出し（「さらに表示」）、履歴が 8 件を超えたら絞り込みの欄を出す（履歴が 1000 件あっても、開くのが遅くならないように）。削除は確認を挟まず「元に戻す」を出す。インポートなどの管理と操作方法は、ふだん使わないので控えめに置く。
+- **トップページの配色**: ページの背景（`--bg`）と文字（`--text`）は、リーダーのテーマ（epub-viewer の `themes`）と同じ色にしている（トップページとリーダーを行き来しても、同じ紙の上にいるように見せる。`tests/test_static.py` が一致を確かめている）。作品名は、リーダーの既定と同じ明朝。`manifest.json` の `background_color` / `theme_color` も、ライトの背景に合わせる（テーマごとには書けないため。これもテストが確かめている）。
+- **表紙ふうの札（`.cover`）**: 札そのものを縦書き（`writing-mode: vertical-rl`）の箱にする。中の要素だけを縦書きにすると、箱が中身の幅まで広がって右へあふれ、長い作品名の書き出しが切れる。
+- **広い画面でのトップページ**: 幅 2400px 以上では、画面の幅に応じてページ全体を拡大する（`index.css` の末尾の `zoom`。1.25〜1.75 倍）。4K のディスプレイやテレビで、画面のまんなかに小さく出ないようにするため。大きさを px で書いた指定もまとめて拡大されるので、個々の指定は変えなくてよい。
 - **トップページの一覧の更新**: ブラウザの「戻る」で戻ったとき（`pageshow` の `persisted`）と、ほかのタブで履歴が変わったとき（`storage`）に描き直す。
 - **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いている（`tests/test_static.py` が一致を確かめている。epub-viewer の更新で色が変わったら、このテストが失敗する）。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
 - **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
@@ -141,7 +145,7 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - Playwright イメージの既定のフォントでは縦書きの漢字が重なって描画される。スクリーンショットを撮るときは和文フォント（Windows なら `C:/Windows/Fonts/yumin.ttf` など）を読み取り専用で `/usr/share/fonts/` にマウントし、`fc-cache -f` してから撮る。フォントはコミットしない。
 - 画面の大きさは、Playwright の `devices`（`iPhone 15`、`iPhone 15 landscape`、`Pixel 7`、`iPad (gen 7)` など）とテレビ相当（1920×1080）でも確かめる。横向きのスマートフォンは幅が 600px を超えるので、幅だけで判定している処理が漏れやすい。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。
-- 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、履歴が 50 件で長いタイトルのとき。
+- 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、1 件だけのとき、数百件で長いタイトルのとき（いちばん新しい履歴が長いタイトルのときも）。
 - 配色を変えたら、文字のコントラストを 3 つのテーマで計算して確かめる（`getComputedStyle` の色と `opacity` を、親までさかのぼって背景に重ねてから比べる）。文字は 4.5:1 以上、アイコンは 3:1 以上。`opacity` で薄くすると、色の指定だけ見ていても気付かない。
 
 ### 操作と状態の再現
