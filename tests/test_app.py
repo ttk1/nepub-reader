@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from nepub_reader import episodes
-from nepub_reader.app import app
+from nepub_reader.app import READER_MODULES, app
 
 
 class AppTestCase(unittest.TestCase):
@@ -74,6 +74,22 @@ class PagesTest(AppTestCase):
             res = self.client.get(href)
             self.assertEqual(res.status_code, 200, href)
             res.close()
+
+    def test_reader_preloads_every_module_it_imports(self):
+        # reader.js から順にたどれるモジュールが、すべて先読みの一覧にあること
+        # （足し忘れると、そのモジュールだけ後から見つかって、読み込みが 1 往復ぶん遅くなる）
+        static = Path(app.static_folder)
+        found, queue = set(), ["reader.js"]
+        while queue:
+            module = queue.pop()
+            if module in found:
+                continue
+            found.add(module)
+            source = (static / module).read_text(encoding="utf-8")
+            for imported in re.findall(r"""^(?:import|export)\b[^'"]*?from\s+['"](\.[^'"]+)['"]""", source, re.M):
+                queue.append((Path(module).parent / imported).as_posix())
+        self.assertGreater(len(found), 10)
+        self.assertEqual(sorted(READER_MODULES), sorted(found))
 
     def test_reader_rejects_invalid_episode(self):
         for path in ["/read/narou/n1234ab/0", "/read/kakuyomu/abc/1", "/read/other/1/1"]:
