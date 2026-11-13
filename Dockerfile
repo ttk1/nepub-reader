@@ -21,7 +21,7 @@ COPY nepub_reader/ ./nepub_reader/
 RUN uv sync --frozen --no-dev
 
 # EPUB のキャッシュ用ディレクトリ
-RUN mkdir -p epub-cache/narou epub-cache/kakuyomu
+RUN mkdir -p epub-cache
 
 # 非 root ユーザーを作成して切り替え
 RUN useradd --create-home appuser && \

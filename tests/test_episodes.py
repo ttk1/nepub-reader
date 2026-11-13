@@ -1,6 +1,7 @@
 """話の取得と EPUB の生成・キャッシュのテスト（元サイトへはアクセスしない）"""
 
 import json
+import os
 import tempfile
 import unittest
 import urllib.error
@@ -137,7 +138,7 @@ class GetEpubTest(CacheTestCase):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
         path, adjacent = episodes.get_epub("narou", "n1234ab", "12")
 
-        self.assertEqual(path, self.cache_dir / "narou" / "n1234ab_12.epub")
+        self.assertEqual(path, self.cache_dir / "v2" / "narou" / "n1234ab_12.epub")
         self.assertIsNone(adjacent)
         # 作品名は <title> から話タイトルを除いたもの（縦中横の加工で話タイトルが変わっても取り除ける）
         self.assertIn("<dc:title id=\"title\">作品 &amp; 名</dc:title>", read_epub(path, "src/content.opf"))
@@ -183,6 +184,42 @@ class GetEpubTest(CacheTestCase):
         self.pages[url] = urllib.error.HTTPError(url, 404, "Not Found", None, None)
         with self.assertRaises(urllib.error.HTTPError):
             episodes.get_epub("narou", "n1234ab", "2")
+
+
+class CacheMaintenanceTest(CacheTestCase):
+    def test_least_recently_read_episodes_are_removed_over_the_limit(self):
+        for episode in ["1", "2", "3"]:
+            self.pages[f"https://kakuyomu.jp/works/100/episodes/{episode}"] = KAKUYOMU_PAGE
+        paths = [episodes.get_epub("kakuyomu", "100", episode)[0] for episode in ["1", "2"]]
+        # 1 話を 2 話より後に読んだことにする（更新時刻を、読んだ順に離しておく）
+        os.utime(paths[1], (1000, 1000))
+        os.utime(paths[0], (2000, 2000))
+
+        with mock.patch.object(episodes, "MAX_CACHE_BYTES", paths[0].stat().st_size * 2.5):  # 2 話分まで
+            newest, _ = episodes.get_epub("kakuyomu", "100", "3")
+
+        self.assertTrue(paths[0].exists())
+        self.assertFalse(paths[1].exists())
+        self.assertFalse(paths[1].with_suffix(".nav.json").exists())
+        self.assertTrue(newest.exists())
+
+    def test_reading_an_episode_makes_it_recent(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        path, _ = episodes.get_epub("narou", "n1234ab", "12")
+        os.utime(path, (1000, 1000))
+        episodes.get_epub("narou", "n1234ab", "12")
+        self.assertGreater(path.stat().st_mtime, 1000)
+
+    def test_caches_of_old_versions_are_removed(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        path, _ = episodes.get_epub("narou", "n1234ab", "12")
+        old = self.cache_dir / "narou" / "n1234ab_1.epub"
+        old.parent.mkdir()
+        old.write_bytes(b"old")
+
+        episodes.remove_old_caches()
+        self.assertFalse(old.parent.exists())
+        self.assertTrue(path.exists())
 
 
 class KakuyomuTest(CacheTestCase):

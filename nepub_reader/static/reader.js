@@ -152,15 +152,32 @@ const start = () =>
     }
   })
 
+// ページの中央のクリック・タップで、ツールバーを出し入れする（隠した分だけページが広がる）。
+// 隠したかどうかは覚えておき、次に開いたときも同じにする
+const TOOLBAR_KEY = `${READER_STORAGE_KEY}:toolbar`
+// ツールバーを出し入れした直後の relocate（ページの大きさが変わったことによるもの）を見分ける
+let relayout = false
+try {
+  toolbar.hidden = localStorage.getItem(TOOLBAR_KEY) === 'hidden'
+} catch {}
+viewer.addEventListener('tap', () => {
+  toolbar.hidden = !toolbar.hidden
+  relayout = true
+  // 戻し方が分かるように知らせる（ページをめくると消える）
+  setStatus(toolbar.hidden ? 'ツールバーを隠しました（ページの中央を押すと戻ります）' : '')
+  try {
+    localStorage.setItem(TOOLBAR_KEY, toolbar.hidden ? 'hidden' : 'shown')
+  } catch {}
+})
+
 viewer.addEventListener('bookend', () => turn(true))
 viewer.addEventListener('bookstart', () => turn(false))
 viewer.addEventListener('relocate', () => {
   if (loading || !current) return
-  setStatus('') // ページをめくったら「最新話です」などを消す
+  // ページをめくったら「最新話です」などを消す（ツールバーの出し入れによる再レイアウトでは消さない）
+  if (!relayout) setStatus('')
+  relayout = false
   savePosition(site, novelId, current.episode, viewer.location)
 })
 viewer.addEventListener('error', (e) => setStatus(`ページを表示できませんでした: ${e.detail.error}`))
-// ページの中央のクリック・タップで、ツールバーを出し入れする（隠した分だけページが広がる）
-viewer.addEventListener('tap', () => (toolbar.hidden = !toolbar.hidden))
-
 start()

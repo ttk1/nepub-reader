@@ -106,7 +106,7 @@ def read_episode(site: str, novel_id: str, episode: str):
         # なろうの作品 ID は小文字にそろえる（大文字の URL で保存された古い履歴やブックマークのため）
         return redirect(f"/read/{site}/{novel_id.lower()}/{episode}")
     if not episodes.is_valid_episode(site, novel_id, episode):
-        return "無効な URL です", 404
+        return render_template("index.html", error="この URL の話は開けません。作品か話の URL を入力し直してください。"), 404
     return render_template("reader.html")
 
 
@@ -160,6 +160,7 @@ def main():
     # デバッグモードでは Werkzeug デバッガ経由で任意コード実行が可能になるため、
     # HOST で明示されない限りローカルホストにのみバインドする
     host = os.environ.get("HOST", "127.0.0.1" if debug else "0.0.0.0")
+    episodes.remove_old_caches()
     print(f"nepub-reader を起動中... http://localhost:{port}/ でアクセスできます")
     app.run(host=host, port=port, debug=debug)
 

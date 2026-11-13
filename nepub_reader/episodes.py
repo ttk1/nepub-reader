@@ -6,7 +6,9 @@
 import datetime
 import html
 import json
+import os
 import re
+import shutil
 import threading
 from pathlib import Path
 from typing import TypedDict
@@ -16,8 +18,13 @@ from nepub.http import get
 from nepub.parser.kakuyomu import KakuyomuEpisodeParser, KakuyomuIndexParser
 from nepub.parser.narou import NarouEpisodeParser
 
-# EPUB のキャッシュ先。<site>/<作品 ID>_<話>.epub に保存する
+# EPUB のキャッシュ先。<CACHE_VERSION>/<site>/<作品 ID>_<話>.epub に保存する
 CACHE_DIR = Path(__file__).parent.parent / "epub-cache"
+# キャッシュの版。EPUB の作り方を変えて、前に作ったものを使わせたくないときに上げる（前の版のものは起動時に消す）
+# v2: 作品名に話タイトルやサイト名が残っていた、古い版のキャッシュを使わない
+CACHE_VERSION = "v2"
+# キャッシュの大きさの上限。超えたら、長く読まれていない話から消す
+MAX_CACHE_BYTES = 1024**3
 
 # 作品 ID・話の形式。キャッシュのファイル名と元サイトの URL に使うので、ここで通したものだけを扱う
 NAROU_ID_PATTERN = re.compile(r"[a-z0-9]{1,20}")
@@ -98,8 +105,33 @@ def refresh_kakuyomu_adjacent(work_id: str, episode_id: str) -> Adjacent:
     return adjacent
 
 
+def remove_old_caches() -> None:
+    """前の版のキャッシュを消す（CACHE_DIR の中で、いまの版のフォルダ以外のもの）"""
+    if not CACHE_DIR.is_dir():
+        return
+    for path in CACHE_DIR.iterdir():
+        if path.name == CACHE_VERSION:
+            continue
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink(missing_ok=True)
+
+
 def _cache_path(site: str, novel_id: str, episode: str) -> Path:
-    return CACHE_DIR / site / f"{novel_id}_{episode}.epub"
+    return CACHE_DIR / CACHE_VERSION / site / f"{novel_id}_{episode}.epub"
+
+
+def _prune_cache() -> None:
+    """キャッシュが上限を超えていたら、長く読まれていない話（更新時刻が古いもの）から消す"""
+    files = sorted((path.stat().st_mtime, path.stat().st_size, path) for path in (CACHE_DIR / CACHE_VERSION).rglob("*.epub"))
+    total = sum(size for _, size, _ in files)
+    for _, size, path in files:
+        if total <= MAX_CACHE_BYTES:
+            break
+        path.unlink(missing_ok=True)
+        path.with_suffix(".nav.json").unlink(missing_ok=True)
+        total -= size
 
 
 def _adjacent_path(work_id: str, episode_id: str) -> Path:
@@ -115,7 +147,10 @@ def _episode_url(site: str, novel_id: str, episode: str) -> str:
 
 def _cached(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | None] | None:
     path = _cache_path(site, novel_id, episode)
-    if not path.exists():
+    try:
+        # 読まれた話の更新時刻を新しくして、_prune_cache で後回しにする
+        os.utime(path)
+    except OSError:
         return None
     if site == "narou":
         return path, None
@@ -143,10 +178,11 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
         path = _cache_path(site, novel_id, episode)
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_episode_epub(path, site, novel_id, episode, _novel_title(site, page, parser) or novel_id, parser)
-        if site == "narou":
-            return path, None
-        adjacent = _extract_adjacent(page)
-        _write_adjacent(novel_id, episode, adjacent)
+        adjacent = None
+        if site == "kakuyomu":
+            adjacent = _extract_adjacent(page)
+            _write_adjacent(novel_id, episode, adjacent)
+        _prune_cache()
         return path, adjacent
 
 

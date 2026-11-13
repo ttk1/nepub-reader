@@ -41,7 +41,9 @@ class PagesTest(AppTestCase):
 
     def test_reader_rejects_invalid_episode(self):
         for path in ["/read/narou/n1234ab/0", "/read/kakuyomu/abc/1", "/read/other/1/1"]:
-            self.assertEqual(self.client.get(path).status_code, 404, path)
+            res = self.client.get(path)
+            self.assertEqual(res.status_code, 404, path)
+            self.assertIn('role="alert"', res.get_data(as_text=True))
 
     def test_reader_redirects_uppercase_narou_id(self):
         res = self.client.get("/read/narou/N1234AB/3")
