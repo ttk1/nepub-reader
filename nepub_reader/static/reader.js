@@ -180,7 +180,8 @@ viewer.addEventListener('tap', () => {
 
 // N で次の話、P で前の話。本文をクリックした後はキーが本文の文書に届くので、そちらでも受ける
 function onKey(e) {
-  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
+  // 押しっぱなしでは移らない（話を次々に取得して、元サイトに負荷をかけないように）
+  if (e.repeat || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
   const key = e.key.toLowerCase()
   if (key === 'n') turn(true)
   else if (key === 'p') turn(false)

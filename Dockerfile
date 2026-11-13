@@ -3,6 +3,8 @@ FROM python:3.12.14-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0a
 
 # ログを即時出力する（docker logs で確認できるように）
 ENV PYTHONUNBUFFERED=1
+# コンテナの外（公開したポート）から届くようにする。公開する範囲は docker run の -p で決める
+ENV HOST=0.0.0.0
 
 WORKDIR /app
 

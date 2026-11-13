@@ -159,9 +159,9 @@ def check_kakuyomu_next_episode(work_id: str, episode_id: str):
 def main():
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
-    # デバッグモードでは Werkzeug デバッガ経由で任意コード実行が可能になるため、
-    # HOST で明示されない限りローカルホストにのみバインドする
-    host = os.environ.get("HOST", "127.0.0.1" if debug else "0.0.0.0")
+    # 既定では、この PC からしか使えないようにする。ほかの端末から使うときは HOST=0.0.0.0 を指定する
+    # （Docker のイメージは指定済み。デバッグモードでは Werkzeug のデバッガで任意のコードを実行できるので、指定しないこと）
+    host = os.environ.get("HOST", "127.0.0.1")
     episodes.remove_old_caches()
     print(f"nepub-reader を起動中... http://localhost:{port}/ でアクセスできます")
     app.run(host=host, port=port, debug=debug)

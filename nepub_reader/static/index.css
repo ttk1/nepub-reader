@@ -7,7 +7,6 @@
     --text-secondary: #667085;
     --border-color: #e4e7ec;
     --accent: #2563eb;
-    --accent-hover: #1d4ed8;
     --accent-soft: #eff4ff;
     --button-bg: #2563eb;
     --button-hover: #1d4ed8;
@@ -32,7 +31,6 @@
     --text-secondary: #98a2b3;
     --border-color: #2c333b;
     --accent: #4f8df9;
-    --accent-hover: #6da3fb;
     --accent-soft: #1d2836;
     /* ダークモードのボタンは眩しくならないよう輝度を落とした青 +
        純白でないテキストにする */
@@ -59,7 +57,6 @@
     --text-secondary: #8a7560;
     --border-color: #dccfb4;
     --accent: #8a4b08;
-    --accent-hover: #6f3c06;
     --accent-soft: #efe2c6;
     --button-bg: #8a4b08;
     --button-hover: #6f3c06;

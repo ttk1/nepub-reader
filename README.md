@@ -29,7 +29,7 @@ uv sync
 uv run nepub-reader
 ```
 
-ブラウザで http://localhost:5000/ にアクセスしてください。
+ブラウザで http://localhost:5000/ にアクセスしてください。既定では、この PC からしか使えません。LAN 内のほかの端末から使う場合は、環境変数 `HOST=0.0.0.0` を指定して起動します（ポートは `PORT` で変えられます）。
 
 ### Docker で起動
 

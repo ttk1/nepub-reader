@@ -122,7 +122,8 @@ class CacheTestCase(unittest.TestCase):
                 raise page
             return page
 
-        for target, value in [("CACHE_DIR", self.cache_dir), ("get", get)]:
+        # 取得の間隔は、それを確かめるテスト以外では空けない
+        for target, value in [("CACHE_DIR", self.cache_dir), ("get", get), ("FETCH_INTERVAL", 0.0)]:
             patcher = mock.patch.object(episodes, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -186,6 +187,22 @@ class GetEpubTest(CacheTestCase):
             episodes.get_epub("narou", "n1234ab", "2")
 
 
+class FetchIntervalTest(CacheTestCase):
+    def test_pages_are_fetched_with_an_interval(self):
+        for episode in ["1", "2"]:
+            self.pages[f"https://ncode.syosetu.com/n1234ab/{episode}/"] = NAROU_PAGE
+        with (
+            mock.patch.object(episodes, "FETCH_INTERVAL", 1.0),
+            mock.patch.object(episodes, "_last_fetch", 0.0),
+            mock.patch.object(episodes.time, "monotonic", return_value=100.0),
+            mock.patch.object(episodes.time, "sleep") as sleep,
+        ):
+            episodes.get_epub("narou", "n1234ab", "1")  # 前の取得から十分たっている
+            episodes.get_epub("narou", "n1234ab", "2")  # 直後なので待つ
+            episodes.get_epub("narou", "n1234ab", "2")  # キャッシュ済みなら待たない
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [0.0, 1.0])
+
+
 class CacheMaintenanceTest(CacheTestCase):
     def test_least_recently_read_episodes_are_removed_over_the_limit(self):
         for episode in ["1", "2", "3"]:
@@ -217,8 +234,12 @@ class CacheMaintenanceTest(CacheTestCase):
         old.parent.mkdir()
         old.write_bytes(b"old")
 
+        leftover = path.with_name("n1234ab_13.epub.x.tmp")
+        leftover.write_bytes(b"partial")
+
         episodes.remove_old_caches()
         self.assertFalse(old.parent.exists())
+        self.assertFalse(leftover.exists())
         self.assertTrue(path.exists())
 
 

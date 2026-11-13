@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import TypedDict
 
@@ -38,6 +39,19 @@ KAKUYOMU_URL_PATTERN = re.compile(r"https?://kakuyomu\.jp/works/(\d+)(?:/episode
 
 # 元サイトへのアクセスを同時に 1 つにする（同じ話を二重に取得しないためでもある）
 _fetch_lock = threading.Lock()
+# 元サイトのページを続けて取得するときに空ける間隔（秒）。話を次々に飛ばしても、元サイトに負荷をかけない
+FETCH_INTERVAL = 1.0
+_last_fetch = 0.0
+
+
+def _get_page(url: str) -> str:
+    """元サイトのページを取得する（_fetch_lock を取ってから呼ぶ）。前の取得から FETCH_INTERVAL 秒は空ける"""
+    global _last_fetch
+    time.sleep(max(0.0, _last_fetch + FETCH_INTERVAL - time.monotonic()))
+    try:
+        return get(url)
+    finally:
+        _last_fetch = time.monotonic()
 
 
 class Adjacent(TypedDict):
@@ -84,7 +98,7 @@ def first_episode(site: str, novel_id: str) -> str | None:
         return "1"
     parser = KakuyomuIndexParser()
     with _fetch_lock:
-        parser.feed(get(f"https://kakuyomu.jp/works/{novel_id}"))
+        parser.feed(_get_page(f"https://kakuyomu.jp/works/{novel_id}"))
     return next((episode["id"] for chapter in parser.chapters for episode in chapter["episodes"]), None)
 
 
@@ -100,13 +114,13 @@ def get_epub(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | N
 def refresh_kakuyomu_adjacent(work_id: str, episode_id: str) -> Adjacent:
     """カクヨムの話のページを取得し直して、前後の話を最新にする（本文の EPUB はそのまま使う）"""
     with _fetch_lock:
-        adjacent = _extract_adjacent(get(_episode_url("kakuyomu", work_id, episode_id)))
+        adjacent = _extract_adjacent(_get_page(_episode_url("kakuyomu", work_id, episode_id)))
         _write_adjacent(work_id, episode_id, adjacent)
     return adjacent
 
 
 def remove_old_caches() -> None:
-    """前の版のキャッシュを消す（CACHE_DIR の中で、いまの版のフォルダ以外のもの）"""
+    """前の版のキャッシュ（CACHE_DIR の中で、いまの版のフォルダ以外のもの）と、書きかけで残ったファイルを消す"""
     if not CACHE_DIR.is_dir():
         return
     for path in CACHE_DIR.iterdir():
@@ -116,6 +130,9 @@ def remove_old_caches() -> None:
             shutil.rmtree(path, ignore_errors=True)
         else:
             path.unlink(missing_ok=True)
+    # 書いている途中で止められたときの一時ファイル
+    for path in (CACHE_DIR / CACHE_VERSION).rglob("*.tmp"):
+        path.unlink(missing_ok=True)
 
 
 def _cache_path(site: str, novel_id: str, episode: str) -> Path:
@@ -123,15 +140,21 @@ def _cache_path(site: str, novel_id: str, episode: str) -> Path:
 
 
 def _prune_cache() -> None:
-    """キャッシュが上限を超えていたら、長く読まれていない話（更新時刻が古いもの）から消す"""
-    files = sorted((path.stat().st_mtime, path.stat().st_size, path) for path in (CACHE_DIR / CACHE_VERSION).rglob("*.epub"))
-    total = sum(size for _, size, _ in files)
-    for _, size, path in files:
-        if total <= MAX_CACHE_BYTES:
-            break
-        path.unlink(missing_ok=True)
-        path.with_suffix(".nav.json").unlink(missing_ok=True)
-        total -= size
+    """キャッシュが上限を超えていたら、長く読まれていない話（更新時刻が古いもの）から消す
+
+    うまくいかなくても（ファイルが同時に消された、など）、作ったばかりの話を返すのは妨げない。
+    """
+    try:
+        stats = [(path.stat(), path) for path in (CACHE_DIR / CACHE_VERSION).rglob("*.epub")]
+        total = sum(stat.st_size for stat, _ in stats)
+        for stat, path in sorted(stats, key=lambda item: item[0].st_mtime):
+            if total <= MAX_CACHE_BYTES:
+                break
+            path.unlink(missing_ok=True)
+            path.with_suffix(".nav.json").unlink(missing_ok=True)
+            total -= stat.st_size
+    except OSError:
+        pass
 
 
 def _adjacent_path(work_id: str, episode_id: str) -> Path:
@@ -169,7 +192,7 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
             parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
         else:
             parser = KakuyomuEpisodeParser(convert_tcy=True)
-        page = get(_episode_url(site, novel_id, episode))
+        page = _get_page(_episode_url(site, novel_id, episode))
         parser.feed(page)
         # 本文が取れないとき（ページ構造の変更、削除された作品など）に、壊れた EPUB をキャッシュしない
         if not parser.paragraphs:
