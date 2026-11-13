@@ -44,7 +44,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 ## 毎回のチェックリスト（変更を終える前に必ず確認）
 
 1. **動作確認**: テストを通す。サーバーや読書履歴（`history.js`）の挙動を変えたらテストも足す（テスト用の依存は増やさず、`unittest` と Node.js 標準のテストランナーで書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
-2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check`（`python` のイメージに `pip install ruff` して実行）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。いまは指摘が 0 件になるようにしてある（DOM の要素の型は、必要なところに JSDoc で書いている）ので、指摘が出たら直す。
+2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check`（`python` のイメージに `pip install ruff` して実行。ルールは `pyproject.toml` の `[tool.ruff]` で固定している。ruff の版によって既定のルールが変わるため）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。いまは指摘が 0 件になるようにしてある（DOM の要素の型は、必要なところに JSDoc で書いている）ので、指摘が出たら直す。
 3. **冗長さ・可読性**: 差分を読み返し、使われていないコード・重複・分かりにくい名前がないか確認する。コメントは「なぜ」を書く。構造はシンプルに保つ。
 4. **ドキュメント**: 操作方法や起動方法を変えたら README.md を更新する。このファイルも「このファイルの運用」に従って更新する。Markdown の文は途中で改行しない（日本語では改行が余分な空白として表示されるため）。
 5. **依存を増やさない**: 追加が必要なら「サプライチェーン対策」の手順に従う。
@@ -106,7 +106,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **文字サイズの初期値**: EpubReader の既定（45px）は離れて読む大きな画面向けなので、狭い画面（幅か高さが 600px 以下。横向きのスマートフォンを含む）では `settings` オプションで 24px を初期値にしている。利用者が変えた後は、保存された値が使われる。
 - **キー操作**: ページ送りのキーは epub-viewer が受ける。こちらが足したのは N（次の話）と P（前の話）だけ。本文をクリックした後はキーが本文の文書に届くので、`sectionload` で渡される文書にもリスナーを付けている。
 - **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。戻し方の知らせは、初めて隠したとき（この値がまだないとき）だけ出す。
-- **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 600ms になる。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す（足し忘れると約 700ms に戻る。テストが、`reader.js` からたどれるモジュールと一覧が一致することを確かめている）。ブラウザは同じサーバーに同時に 6 本までしか接続しないので、HTML の後に読み込むファイル（CSS・JS）の数が 6 の倍数をまたぐと、往復が 1 回増える（12 個までなら約 500ms、いまは 14 個で約 600ms）。この境目に合わせるための細工（CSS の埋め込みなど）はしていない。読み込みまわりを変えたら、遅延を入れて測り直す（Chromium なら CDP の `Network.emulateNetworkConditions`）。
+- **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるため（遅延 100ms の通信で、最初のページが出るまでが約 100ms 縮む）。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す（テストが、`reader.js` からたどれるモジュールと一覧が一致することを確かめている）。読み込むファイルの数を減らすための細工（CSS の埋め込みなど）はしない。
 
 ### 読書履歴とトップページ
 
@@ -119,7 +119,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ### セキュリティと配布
 
-- **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
+- **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている。`X-Frame-Options` も同じ意味の `SAMEORIGIN` にそろえている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
 - **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
 - **Dockerfile は 2 段**: ビルド用の段で git と uv を使って依存を入れ、実行用の段にはアプリと依存（`/app`）だけをコピーする。実行用のイメージに git と uv は入らない。動かすユーザー（`appuser`）が書き込めるのは `epub-cache/` だけで、アプリのコードは書き換えられない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。

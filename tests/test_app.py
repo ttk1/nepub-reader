@@ -49,7 +49,7 @@ class PagesTest(AppTestCase):
         self.assertIn("script-src 'self'", csp)
         self.assertIn("frame-ancestors 'self'", csp)
         self.assertEqual(res.headers["X-Content-Type-Options"], "nosniff")
-        self.assertEqual(res.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(res.headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertEqual(res.headers["Referrer-Policy"], "same-origin")
         self.assertEqual(res.headers["X-Robots-Tag"], "noindex, nofollow")
 

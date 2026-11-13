@@ -18,3 +18,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+# 点検のルールを固定する（ruff の版が上がって既定のルールが変わっても、結果が変わらないように）
+[tool.ruff]
+line-length = 200
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "SIM", "UP"]
