@@ -101,7 +101,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
-- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。
+- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `window.applyPageTheme()` を呼んで合わせ直す。
 
 ## ブラウザでの確認
 

@@ -15,7 +15,10 @@ const SETTINGS_KEY = `${READER_STORAGE_KEY}:settings`
 const settingsStorage = {
   getItem: (key) => (key === SETTINGS_KEY ? localStorage.getItem(key) : null),
   setItem: (key, value) => {
-    if (key === SETTINGS_KEY) localStorage.setItem(key, value)
+    if (key !== SETTINGS_KEY) return
+    localStorage.setItem(key, value)
+    // テーマが変わったかもしれないので、ページの側（theme.js。準備中の背景と、端末の上部の帯の色）も合わせる
+    window.applyPageTheme?.()
   },
 }
 
