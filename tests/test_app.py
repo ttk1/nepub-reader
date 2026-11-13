@@ -141,6 +141,13 @@ class EpubTest(AppTestCase):
             with mock.patch.object(episodes, "get_epub", side_effect=error), self.assertLogs(level="ERROR"):
                 self.assertEqual(self.client.get("/epub/narou/n1234ab/1").status_code, status, error)
 
+    def test_missing_first_episode_of_narou_mentions_short_stories(self):
+        not_found = urllib.error.HTTPError("", 404, "Not Found", None, None)
+        with mock.patch.object(episodes, "get_epub", side_effect=not_found), self.assertLogs(level="ERROR"):
+            self.assertIn("短編には対応していません", self.client.get("/epub/narou/n1234ab/1").get_data(as_text=True))
+            self.assertNotIn("短編", self.client.get("/epub/narou/n1234ab/2").get_data(as_text=True))
+            self.assertNotIn("短編", self.client.get("/epub/kakuyomu/100/1").get_data(as_text=True))
+
     def test_requests_from_other_sites_are_rejected(self):
         get_epub = self.patch("get_epub", return_value=(self.epub, None))
         refresh = self.patch("refresh_kakuyomu_adjacent", return_value={"prev": None, "next": None})

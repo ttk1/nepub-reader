@@ -127,6 +127,9 @@ def episode_epub(site: str, novel_id: str, episode: str):
     except urllib.error.HTTPError as e:
         logging.error(f"エピソード取得エラー: {target}, status={e.code}")
         if e.code == 404:
+            if site == "narou" and episode == "1":
+                # 作品ページの URL から開いた場合など。短編は話のページがないので、ここに来る
+                return "1 話が見つかりませんでした（短編には対応していません）", 404
             return "エピソードが見つかりませんでした", 404
         return "エピソードの取得に失敗しました", 502
     except OSError as e:
