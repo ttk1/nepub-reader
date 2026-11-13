@@ -31,8 +31,8 @@ const settingsStorage = {
   setItem: (key, value) => {
     if (key !== SETTINGS_KEY) return
     localStorage.setItem(key, value)
-    // テーマが変わったかもしれないので、ページの側（theme.js。準備中の背景と、端末の上部の帯の色）も合わせる
-    window.applyPageTheme?.()
+    // テーマが変わったかもしれないので、ページの側（theme.js。準備中の背景と、端末の上部の帯の色）に知らせる
+    dispatchEvent(new Event('nepub-reader:settings'))
   },
 }
 
@@ -43,6 +43,7 @@ const settings = matchMedia('(max-width: 600px), (max-height: 600px)').matches ?
 
 const reader = new EpubReader(document.getElementById('reader'), { storage: settingsStorage, storageKey: READER_STORAGE_KEY, settings })
 const { toolbar, viewer } = reader
+/** @type {HTMLElement} */
 const title = toolbar.querySelector('.title')
 
 // 「前の話」「次の話」。狭い画面では「の」を隠して短くする（reader.css）

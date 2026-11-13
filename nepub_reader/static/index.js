@@ -7,7 +7,7 @@ const message = document.getElementById('history-message')
 const exportButton = document.getElementById('history-export')
 const clearButton = document.getElementById('history-clear')
 const importButton = document.getElementById('history-import')
-const importInput = document.getElementById('history-import-file')
+const importInput = /** @type {HTMLInputElement} */ (document.getElementById('history-import-file'))
 
 const EXTERNAL_ICON =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
@@ -155,6 +155,7 @@ clearButton.addEventListener('click', () => {
 // ---- URL の入力 ----
 
 const form = document.getElementById('url-form')
+/** @type {HTMLButtonElement} */
 const submitButton = form.querySelector('button[type="submit"]')
 // すぐ URL を貼れるよう入力欄にフォーカスする。タッチ操作の端末では、開くたびにキーボードが出てしまうのでしない
 if (matchMedia('(hover: hover) and (pointer: fine)').matches) document.getElementById('url-input').focus()

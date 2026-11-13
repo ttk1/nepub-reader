@@ -44,7 +44,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 ## 毎回のチェックリスト（変更を終える前に必ず確認）
 
 1. **動作確認**: テストを通す。サーバーや読書履歴（`history.js`）の挙動を変えたらテストも足す（テスト用の依存は増やさず、`unittest` と Node.js 標準のテストランナーで書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
-2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check`（`python` のイメージに `pip install ruff` して実行）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。DOM の型についての指摘（`HTMLElement` に `files` がない、など）は無視してよい。
+2. **機械的な点検**（大きく変えたとき。どちらも使い捨てのコンテナで、ホストには何も入れない）: Python は `ruff check`（`python` のイメージに `pip install ruff` して実行）。JS は TypeScript の `--allowJs --checkJs`（`--strict false`）で、同梱の epub-viewer の型定義に対して API の使い方を確かめる（Playwright イメージに epub-viewer の `node_modules` ボリュームを `<作業フォルダ>/node_modules` としてマウントし、その `.bin/tsc` を使う。別の場所にマウントすると TypeScript 7 が実行ファイルを見つけられない）。いまは指摘が 0 件になるようにしてある（DOM の要素の型は、必要なところに JSDoc で書いている）ので、指摘が出たら直す。
 3. **冗長さ・可読性**: 差分を読み返し、使われていないコード・重複・分かりにくい名前がないか確認する。コメントは「なぜ」を書く。構造はシンプルに保つ。
 4. **ドキュメント**: 操作方法や起動方法を変えたら README.md を更新する。このファイルも「このファイルの運用」に従って更新する。Markdown の文は途中で改行しない（日本語では改行が余分な空白として表示されるため）。
 5. **依存を増やさない**: 追加が必要なら「サプライチェーン対策」の手順に従う。
@@ -105,7 +105,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
-- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `window.applyPageTheme()` を呼んで合わせ直す。
+- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
 
 ## ブラウザでの確認
 

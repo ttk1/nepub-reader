@@ -27,6 +27,6 @@
   systemDark.addEventListener('change', apply)
   // ブラウザの「戻る」でリーダーから戻ってきたときにも合わせ直す
   addEventListener('pageshow', apply)
-  // リーダーでテーマを変えたときに、リーダーから呼ぶ（同じページでの設定の保存は、storage イベントにならない）
-  window.applyPageTheme = apply
+  // リーダーでテーマを変えたとき。同じページでの設定の保存は storage イベントにならないので、リーダーがこのイベントで知らせる
+  addEventListener('nepub-reader:settings', apply)
 })()
