@@ -278,6 +278,30 @@ class CacheMaintenanceTest(CacheTestCase):
         episodes.get_epub("narou", "n1234ab", "12")
         self.assertGreater(path.stat().st_mtime, 1000)
 
+    def test_broken_cache_is_made_again(self):
+        # 途中で切れたファイルなど。そのまま返すと、リーダーは何度やり直しても開けない
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        path, _ = episodes.get_epub("narou", "n1234ab", "12")
+        path.write_bytes(path.read_bytes()[:100])
+
+        episodes.get_epub("narou", "n1234ab", "12")
+        self.assertEqual(len(self.fetched), 2)
+        self.assertTrue(zipfile.is_zipfile(path))
+
+    def test_cache_is_used_even_if_it_cannot_be_touched(self):
+        # 読み取り専用のキャッシュなど。更新時刻を変えられなくても、あるものは使う
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        path, _ = episodes.get_epub("narou", "n1234ab", "12")
+        with mock.patch.object(episodes.os, "utime", side_effect=PermissionError("read-only")):
+            self.assertEqual(episodes.get_epub("narou", "n1234ab", "12"), (path, None))
+        self.assertEqual(len(self.fetched), 1)
+
+    def test_failing_to_remove_old_caches_does_not_stop_the_server(self):
+        old = self.cache_dir / "old.epub"
+        old.write_bytes(b"old")
+        with mock.patch.object(Path, "unlink", side_effect=PermissionError("denied")), self.assertLogs(level="WARNING"):
+            episodes.remove_old_caches()
+
     def test_caches_of_old_versions_are_removed(self):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
         path, _ = episodes.get_epub("narou", "n1234ab", "12")

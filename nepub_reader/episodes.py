@@ -12,6 +12,7 @@ import re
 import shutil
 import threading
 import time
+import zipfile
 from pathlib import Path
 from typing import TypedDict
 
@@ -121,19 +122,25 @@ def refresh_kakuyomu_adjacent(work_id: str, episode_id: str) -> Adjacent:
 
 
 def remove_old_caches() -> None:
-    """前の版のキャッシュ（CACHE_DIR の中で、いまの版のフォルダ以外のもの）と、書きかけで残ったファイルを消す"""
-    if not CACHE_DIR.is_dir():
-        return
-    for path in CACHE_DIR.iterdir():
-        if path.name == CACHE_VERSION:
-            continue
-        if path.is_dir():
-            shutil.rmtree(path, ignore_errors=True)
-        else:
+    """前の版のキャッシュ（CACHE_DIR の中で、いまの版のフォルダ以外のもの）と、書きかけで残ったファイルを消す
+
+    消せなくても（読み取り専用、権限がない、など）、サーバーの起動は止めない。
+    """
+    try:
+        if not CACHE_DIR.is_dir():
+            return
+        for path in CACHE_DIR.iterdir():
+            if path.name == CACHE_VERSION:
+                continue
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
+        # 書いている途中で止められたときの一時ファイル
+        for path in (CACHE_DIR / CACHE_VERSION).rglob("*.tmp"):
             path.unlink(missing_ok=True)
-    # 書いている途中で止められたときの一時ファイル
-    for path in (CACHE_DIR / CACHE_VERSION).rglob("*.tmp"):
-        path.unlink(missing_ok=True)
+    except OSError as e:
+        logging.warning(f"古いキャッシュを消せませんでした: {e}")
 
 
 def _cache_path(site: str, novel_id: str, episode: str) -> Path:
@@ -171,11 +178,15 @@ def _episode_url(site: str, novel_id: str, episode: str) -> str:
 
 def _cached(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | None] | None:
     path = _cache_path(site, novel_id, episode)
+    # 途中で切れたファイルなど、EPUB として読めないものは、キャッシュがないものとして作り直す
+    # （そのまま返すと、リーダーは何度やり直しても開けない）
+    if not zipfile.is_zipfile(path):
+        return None
     try:
         # 読まれた話の更新時刻を新しくして、_prune_cache で後回しにする
         os.utime(path)
     except OSError:
-        return None
+        pass  # 読み取り専用のキャッシュなど。あるものは使う
     if site == "narou":
         return path, None
     # 前後の話が読めないカクヨムの話は、キャッシュがないものとして作り直す
