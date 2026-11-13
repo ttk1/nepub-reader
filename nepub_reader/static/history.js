@@ -48,12 +48,38 @@ export function savePosition(site, novelId, episode, position) {
   saveHistory(history)
 }
 
+/** インポートした履歴の 1 件を検証し、既知の項目だけを残す（使えないものは null） */
+export function sanitizeHistoryItem(item) {
+  if (!item || typeof item !== 'object' || !item.novel_id || item.last_episode == null) return null
+  const text = (value, fallback) => (typeof value === 'string' ? value : fallback)
+  return {
+    site: item.site === 'kakuyomu' ? 'kakuyomu' : 'narou',
+    novel_id: String(item.novel_id),
+    novel_title: text(item.novel_title, String(item.novel_id)),
+    episode_title: text(item.episode_title, ''),
+    last_episode: item.last_episode,
+    last_accessed: text(item.last_accessed, ''),
+    position: isPosition(item.position) ? { index: item.position.index, progress: item.position.progress } : undefined,
+  }
+}
+
+/** 2 つの履歴を合わせる。同じ作品は last_accessed が新しい方を残し、新しい順に並べる（ISO 8601 の文字列は辞書順で時刻順になる） */
+export function mergeHistory(current, imported) {
+  const newer = (a, b) => (a.last_accessed || '') > (b.last_accessed || '')
+  const latest = new Map()
+  for (const item of [...current, ...imported]) {
+    const key = novelKey(item)
+    if (!latest.has(key) || newer(item, latest.get(key))) latest.set(key, item)
+  }
+  return [...latest.values()].sort((a, b) => newer(b, a) - newer(a, b))
+}
+
 // 以前の版は、読書位置を EpubReader に保存させていた（`nepub-reader:position:<site>:<作品 ID>:<話>`）。
 // 履歴が指している話のものを履歴に移し、残りは消す
 function migratePositions() {
   const prefix = `${READER_STORAGE_KEY}:position:`
   try {
-    const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix))
+    const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)).filter((key) => key.startsWith(prefix))
     if (keys.length === 0) return
     const history = getHistory()
     for (const key of keys) {

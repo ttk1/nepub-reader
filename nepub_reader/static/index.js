@@ -1,5 +1,5 @@
 // トップページ。読書履歴の一覧・削除・エクスポート・インポート。
-import { getHistory, isPosition, novelKey, saveHistory } from './history.js'
+import { getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory } from './history.js'
 
 const list = document.getElementById('history-list')
 const message = document.getElementById('history-message')
@@ -120,32 +120,6 @@ function exportHistory() {
   URL.revokeObjectURL(a.href)
 }
 
-// インポートデータの各エントリを検証し、既知のフィールドだけ残す
-function sanitizeItem(item) {
-  if (!item || typeof item !== 'object' || !item.novel_id || item.last_episode == null) return null
-  const text = (value, fallback) => (typeof value === 'string' ? value : fallback)
-  return {
-    site: item.site === 'kakuyomu' ? 'kakuyomu' : 'narou',
-    novel_id: String(item.novel_id),
-    novel_title: text(item.novel_title, String(item.novel_id)),
-    episode_title: text(item.episode_title, ''),
-    last_episode: item.last_episode,
-    last_accessed: text(item.last_accessed, ''),
-    position: isPosition(item.position) ? { index: item.position.index, progress: item.position.progress } : undefined,
-  }
-}
-
-// 同一作品は last_accessed が新しい方を残し、新しい順に並べる（ISO 8601 文字列は辞書順で時刻順になる）
-function mergeHistory(current, imported) {
-  const newer = (a, b) => (a.last_accessed || '') > (b.last_accessed || '')
-  const latest = new Map()
-  for (const item of [...current, ...imported]) {
-    const key = novelKey(item)
-    if (!latest.has(key) || newer(item, latest.get(key))) latest.set(key, item)
-  }
-  return [...latest.values()].sort((a, b) => newer(b, a) - newer(a, b))
-}
-
 async function importHistory(file) {
   let items
   try {
@@ -153,7 +127,7 @@ async function importHistory(file) {
     // エクスポート形式 {history: [...]} と生の配列の両方を受け付ける
     const imported = Array.isArray(data) ? data : data?.history
     if (!Array.isArray(imported)) throw new Error('unsupported format')
-    items = imported.map(sanitizeItem).filter(Boolean)
+    items = imported.map(sanitizeHistoryItem).filter(Boolean)
   } catch {
     notify('履歴ファイルを読み込めませんでした。エクスポートした JSON ファイルを指定してください。')
     return

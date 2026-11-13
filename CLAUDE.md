@@ -20,7 +20,7 @@
 | `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
-| `tests/` | サーバーのテスト（標準ライブラリの `unittest`。元サイトへはアクセスしない） |
+| `tests/` | サーバーのテスト（`test_*.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）と、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
 
 ルート: `/read/<site>/<作品 ID>/<話>` がリーダー画面、`/epub/<site>/<作品 ID>/<話>` が 1 話分の EPUB、`/api/kakuyomu/next-episode/...` がカクヨムの最新話の再確認、`/go?url=` が元サイトの URL からリーダー画面への移動。`<話>` はなろうなら話数、カクヨムならエピソード ID。
@@ -30,15 +30,17 @@
 ```sh
 docker build -t nepub-reader .
 docker run --rm -p 127.0.0.1:5000:5000 nepub-reader   # http://localhost:5000/
-# テスト（イメージの Python で、リポジトリのコードを読み取り専用でマウントして実行する）
+# サーバーのテスト（イメージの Python で、リポジトリのコードを読み取り専用でマウントして実行する）
 MSYS_NO_PATHCONV=1 docker run --rm -v "<リポジトリの絶対パス>:/src:ro" -w /src nepub-reader /app/.venv/bin/python -B -m unittest discover -s tests
+# 読書履歴（history.js）のテスト（「ブラウザでの確認」と同じ Playwright イメージの Node.js を使う）
+MSYS_NO_PATHCONV=1 docker run --rm -v "<リポジトリの絶対パス>:/src:ro" -w /src <Playwright イメージ> node --test tests/history.test.mjs
 ```
 
 Windows の Git Bash から `docker` にコンテナ内パス（`/work` など）を渡すと Windows パスに自動変換されるので、`MSYS_NO_PATHCONV=1` を前に付けて変換を無効にする。
 
 ## 毎回のチェックリスト（変更を終える前に必ず確認）
 
-1. **動作確認**: テストを通す。サーバーの挙動を変えたらテストも足す（テスト用の依存は増やさず `unittest` で書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
+1. **動作確認**: テストを通す。サーバーや読書履歴（`history.js`）の挙動を変えたらテストも足す（テスト用の依存は増やさず、`unittest` と Node.js 標準のテストランナーで書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
 2. **冗長さ・可読性**: 差分を読み返し、使われていないコード・重複・分かりにくい名前がないか確認する。コメントは「なぜ」を書く。構造はシンプルに保つ。
 3. **ドキュメント**: 操作方法や起動方法を変えたら README.md を更新する。このファイルも「このファイルの運用」に従って更新する。Markdown の文は途中で改行しない（日本語では改行が余分な空白として表示されるため）。
 4. **依存を増やさない**: 追加が必要なら「サプライチェーン対策」の手順に従う。
@@ -76,6 +78,8 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は自動では再確認しない（キーを押すたびに元サイトへアクセスしないように）。知らせの「再確認」ボタンを押したときだけ確かめ直す。
 - **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
+- **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
+- **`open()` の時間切れ**: EpubReader の `open()` は、本文のフレームをページの CSP が止めたときなどに終わらないことがある（Firefox は `frame-src` に blob: がないとき、WebKit はそれに加えて `frame-ancestors 'none'` のとき）。`reader.js` は 30 秒で打ち切ってエラーを出す。
 - **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。ページをめくると消すが、ツールバーの出し入れでも `relocate` が発生するので、その分は `relayout` で見分けて消さない。
 - **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。
 - **EPUB のメタデータ**: 作品名は `book.metadata.title`、話タイトルは `book.toc[0].label`。
@@ -95,6 +99,7 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - アプリのコンテナとテスト用コンテナを同じ Docker ネットワークにつなぎ、コンテナ名でアクセスする。
 - Playwright は epub-viewer の `node_modules` ボリュームを読み取り専用でマウントし、`NODE_PATH` を指定して CommonJS のスクリプトから `require('@playwright/test')` する。確認用スクリプトはリポジトリに入れない。
 - Playwright イメージの既定のフォントでは縦書きの漢字が重なって描画される。スクリーンショットを撮るときは和文フォント（Windows なら `C:/Windows/Fonts/yumin.ttf` など）を読み取り専用で `/usr/share/fonts/` にマウントし、`fc-cache -f` してから撮る。フォントはコミットしない。
-- スワイプは、Chromium なら CDP の `Input.dispatchTouchEvent`（`touchStart` → `touchMove` を数回 → `touchEnd`）で再現できる。
+- スワイプは、Chromium なら CDP の `Input.dispatchTouchEvent`（`touchStart` → `touchMove` を数回 → `touchEnd`）で再現できる。Firefox と WebKit は、本文の iframe の文書に `TouchEvent` を合成して送る（Linux の WebKit は `Touch` を作れないので、`touches` などを持たせた `Event` で代える）。
+- `page.route()` でページ自体（`/read/...`）のレスポンスを差し替えると、Chromium では続く静的ファイルの読み込みが止められることがある。
 - 元サイトへのアクセスは最小限にする（同じ話はキャッシュが使われる）。最新話や読み込みの失敗は `page.route()` でレスポンスを差し替えて再現する（差し替えた 404 は、Chromium と WebKit ではコンソールのエラーとして記録される）。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。
