@@ -207,21 +207,55 @@ const TOOLBAR_KEY = `${READER_STORAGE_KEY}:toolbar`
 let relayout = false
 // これまでに出し入れしたことがあるか（保存された値があるか）。戻し方の知らせは、初めて隠したときだけ出す
 let toggledBefore = false
+// 利用者がツールバーを隠しているか
+let toolbarHidden = false
+// 隠したツールバーを、マウスを画面の上の端に寄せている間だけ出しているか
+let peeking = false
 try {
   const saved = localStorage.getItem(TOOLBAR_KEY)
   toggledBefore = saved !== null
-  toolbar.hidden = saved === 'hidden'
+  toolbarHidden = saved === 'hidden'
 } catch {}
+
+function showToolbar() {
+  // のぞいている間は、ページの上に重ねて出す（reader.css の .peek）。ページの大きさが変わらないので、
+  // マウスを動かすたびに本文が組み直されない。ページの大きさが変わらない順に切り替える
+  if (peeking) toolbar.parentElement.classList.add('peek')
+  toolbar.hidden = toolbarHidden && !peeking
+  if (!peeking) toolbar.parentElement.classList.remove('peek')
+}
+showToolbar()
+
 viewer.addEventListener('tap', () => {
-  toolbar.hidden = !toolbar.hidden
+  toolbarHidden = !toolbarHidden
+  peeking = false
+  showToolbar()
   relayout = true
   // 初めて隠したときは、戻し方が分かるように知らせる（ページをめくると消える）。それ以外は、出ている知らせを消すだけ
-  setStatus(toolbar.hidden && !toggledBefore ? 'ツールバーを隠しました（ページの中央を押すと戻ります）' : '')
+  const hint = matchMedia('(hover: hover)').matches ? 'ページの中央を押すと戻ります。マウスを画面の上の端に寄せても出ます' : 'ページの中央を押すと戻ります'
+  setStatus(toolbarHidden && !toggledBefore ? `ツールバーを隠しました（${hint}）` : '')
   toggledBefore = true
   try {
-    localStorage.setItem(TOOLBAR_KEY, toolbar.hidden ? 'hidden' : 'shown')
+    localStorage.setItem(TOOLBAR_KEY, toolbarHidden ? 'hidden' : 'shown')
   } catch {}
 })
+
+// 隠したツールバーは、戻し方（ページの中央を押す）を忘れると出せなくなる。マウスを画面の上の端（ツールバーが
+// あったあたり）に寄せたら出し、離れたら隠す。タッチ操作には、寄せるという動きがないので働かせない
+const PEEK_ZONE = 48
+/** マウスが動いた。y は画面の上の端からの位置、onToolbar はツールバー（メニューを含む）の上にあるか */
+function onMouseMove(y, onToolbar) {
+  if (!toolbarHidden) return
+  // メニューを開いている間は、マウスが離れても隠さない（メニューを閉じた後で、離れていれば隠す）
+  const wanted = onToolbar || y <= PEEK_ZONE || (peeking && toolbar.querySelector('details[open]') !== null)
+  if (wanted === peeking) return
+  peeking = wanted
+  showToolbar()
+}
+const isMouse = (e) => e.pointerType === 'mouse'
+addEventListener('pointermove', (e) => isMouse(e) && onMouseMove(e.clientY, e.target instanceof Node && toolbar.contains(e.target)))
+// マウスが画面の外へ出た（ブラウザのタブやアドレスバーへ動かした）
+document.documentElement.addEventListener('pointerleave', (e) => isMouse(e) && onMouseMove(Infinity, false))
 
 // N で次の話、P で前の話。ページ送りのキーは EpubReader が受ける
 function onKey(e) {
@@ -237,6 +271,8 @@ viewer.addEventListener('sectionload', (e) => {
   const { doc } = e.detail
   // 本文をクリックした後はキーが本文の文書に届くので、そちらでも受ける
   doc.defaultView.addEventListener('keydown', onKey)
+  // 本文の上でのマウスの動きも、本文の文書にしか届かない。本文の枠の位置を足して、画面の上の端からの位置にする
+  doc.addEventListener('pointermove', (e) => isMouse(e) && onMouseMove(e.clientY + (doc.defaultView.frameElement?.getBoundingClientRect().top ?? 0), false))
   doc.head.append(Object.assign(doc.createElement('style'), { textContent: PAGE_STYLE }))
 })
 viewer.addEventListener('bookend', () => turn(true))
