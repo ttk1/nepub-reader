@@ -12,6 +12,8 @@ export interface ReaderSettings {
     lineHeight: number;
     /** Page width in px, 0 = full width. */
     maxWidth: number;
+    /** Page margin in px. */
+    margin: number;
     writingMode: ViewerOptions['writingMode'];
     /** Two pages (fixed layout) or two columns (horizontal text) side by side. */
     spread: ViewerOptions['spread'];
@@ -29,12 +31,12 @@ export interface ReaderOptions {
     storageKey: string;
     /** Initial settings, used until the user changes them. */
     settings: Partial<ReaderSettings>;
-    /** Other EpubViewer options (e.g. `keyboard`, `wheel`, `cooldown`). Look-related ones come from the settings. */
+    /** Other EpubViewer options (e.g. `keyboard`, `wheel`, `cooldown`). Look-related ones, the margin among them, come from the settings. */
     viewer: Partial<ViewerOptions>;
 }
 export interface OpenOptions {
     /**
-     * Key for the saved reading position. Defaults to dc:identifier, then the URL or file name.
+     * Key for the saved reading position. Defaults to dc:identifier, then the URL or file name, then the title.
      * Give one when books share an identifier, e.g. per-episode EPUBs of the same novel.
      */
     key?: string;
@@ -42,9 +44,10 @@ export interface OpenOptions {
     location?: BookTarget;
 }
 /**
- * A ready-made reader UI: toolbar (table of contents, progress, and a settings menu for font size,
- * font, width, writing mode and theme) + EpubViewer, with settings and reading positions saved in
- * a storage. Add your own controls to `toolbar`, and use `viewer` for events and navigation.
+ * A ready-made reader UI: toolbar (table of contents, progress with a slider, and a settings menu for font size,
+ * font, line height, width, margin, writing mode, spread, direction and theme) + EpubViewer, with settings
+ * and reading positions saved in a storage. Add your own controls to `toolbar`, and use `viewer`
+ * for events and navigation.
  */
 export declare class EpubReader {
     #private;

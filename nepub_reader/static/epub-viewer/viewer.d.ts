@@ -50,7 +50,10 @@ export interface EpubViewerEventMap {
     tap: CustomEvent<{
         x: number;
     }>;
-    /** A page turn by key, click, wheel or swipe, or a link in the book, failed (e.g. a broken section). Calls from code reject instead. */
+    /**
+     * A page turn by key, click, wheel or swipe, or a link in the book, failed (e.g. a broken section).
+     * Calls from code reject instead. Also when the book tried to take its page elsewhere: that page is not shown.
+     */
     error: CustomEvent<{
         error: unknown;
     }>;

@@ -1,8 +1,3 @@
-/**
- * Reflowable text: a section is one document, split into pages with CSS multi-column layout. The
- * html element is the multi-column container; a page turn scrolls it by one page. For vertical
- * text the columns stack downwards, so the pages follow each other downwards as well.
- */
 import type { ViewerOptions } from './options.ts';
 /** How a document is split into pages. */
 export interface Pagination {

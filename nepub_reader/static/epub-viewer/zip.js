@@ -1,8 +1,3 @@
-/**
- * Minimal read-only ZIP reader for EPUB archives.
- * Supports "stored" and "deflate" entries (no ZIP64, no encryption).
- * Entries are read lazily from the Blob, so large files are not loaded into memory at once.
- */
 export class ZipReader {
     #blob;
     #entries;
@@ -11,7 +6,6 @@ export class ZipReader {
         this.#entries = entries;
     }
     static async open(blob) {
-        // The End Of Central Directory record is in the last 22 + (comment ≦ 65535) bytes.
         const tail = await view(blob, Math.max(0, blob.size - 22 - 0xffff), blob.size);
         let eocd = tail.byteLength - 22;
         while (eocd >= 0 && tail.getUint32(eocd, true) !== 0x06054b50)
@@ -42,7 +36,6 @@ export class ZipReader {
     has(name) {
         return this.#entries.has(name);
     }
-    /** Uncompressed size in bytes (0 if not found). */
     size(name) {
         return this.#entries.get(name)?.size ?? 0;
     }
@@ -58,9 +51,6 @@ export class ZipReader {
         if (entry.method === 0)
             return data;
         if (entry.method === 8) {
-            // Read in chunks and stop at the declared size, so that an entry cannot turn out larger
-            // than it says (a few kilobytes of crafted data can inflate to gigabytes). The archive can
-            // still say that an entry is large; this only keeps it to its word.
             const reader = data.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
             const chunks = [];
             for (let length = 0;;) {

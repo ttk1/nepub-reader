@@ -49,8 +49,9 @@ export declare class Book {
      */
     loadCover(): Promise<Blob | undefined>;
     /**
-     * Returns a URL (blob:) for a file in the archive, to use it as an image, a style sheet or a font. HTML and CSS are rewritten so that
-     * their references (images, stylesheets, fonts) also point to blob: URLs.
+     * Returns a URL (blob:) for a file in the archive, to use it as an image, a stylesheet or a font.
+     * HTML and CSS are rewritten so that their references (images, stylesheets, fonts) also point to
+     * such URLs.
      *
      * Files that can hold scripts (e.g. SVG images) get a data: URL instead: see #createUrl.
      */

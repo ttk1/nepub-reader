@@ -4,14 +4,22 @@ import { EpubViewer } from './viewer.js';
 const DEFAULT_SETTINGS = {
     theme: 'system',
     font: 'mincho',
-    fontSize: 45, // large enough to read comfortably at a distance
+    fontSize: 45,
     lineHeight: 0,
     maxWidth: 0,
+    margin: 32,
     writingMode: 'auto',
     spread: 'auto',
     direction: 'auto',
 };
-/** A row of the settings panel: radio buttons named after the setting, one per value. */
+const SEEK_KEYS = {
+    ArrowLeft: 'goLeft',
+    ArrowRight: 'goRight',
+    ArrowUp: 'prev',
+    ArrowDown: 'next',
+    PageUp: 'prev',
+    PageDown: 'next',
+};
 const choices = (name, label, options) => `
   <div class="row">
     <span>${label}</span>
@@ -20,10 +28,6 @@ const choices = (name, label, options) => `
     </span>
   </div>`;
 const swatch = ({ background, color }) => `background:${background};color:${color}`;
-// The two menus are <details>, so they open and close without any code. The settings are in a
-// <form> to keep the radio button groups of several readers on one page apart. Settings that only
-// work for one kind of book (reflowable text, or fixed-layout pages) are shown for that kind only,
-// and the spread not for vertical text.
 const TOOLBAR = `
   <details class="toc" hidden>
     <summary>目次</summary>
@@ -31,6 +35,7 @@ const TOOLBAR = `
   </details>
   <span class="title"></span>
   <span class="progress"><span class="pages"></span><span class="percent"></span></span>
+  <input type="range" class="seek" min="0" max="1" step="any" value="0" title="本の中の位置" aria-label="本の中の位置" hidden>
   <details class="settings">
     <summary title="表示設定" aria-label="表示設定">Aa</summary>
     <form class="panel">
@@ -46,6 +51,7 @@ const TOOLBAR = `
         ${choices('font', 'フォント', [['mincho', '明朝'], ['gothic', 'ゴシック'], ['book', '本の指定']])}
         ${choices('lineHeight', '行間', [[0, '本の指定'], [1.3, '狭い'], [1.6, '標準'], [1.9, '広い'], [2.2, 'とても広い']])}
         ${choices('maxWidth', '表示幅', [[0, '全幅'], [1400, '1400'], [1200, '1200'], [1000, '1000'], [800, '800'], [600, '600']])}
+        ${choices('margin', '余白', [[16, '狭い'], [32, '標準'], [64, '広い'], [96, 'とても広い']])}
         ${choices('writingMode', '表示方向', [['auto', '自動'], ['vertical', '縦書き'], ['horizontal', '横書き']])}
       </div>
       <div class="not-vertical">
@@ -62,11 +68,6 @@ const TOOLBAR = `
 ])}
     </form>
   </details>`;
-// Scoped to .epub-reader so that it can live inside another app's page. The toolbar takes the
-// colors of the page (--bg / --fg, set from the theme) so that it stays out of the way of the text.
-// Lines and highlights are a translucent grey, which works on any theme. The CSS keeps to what the
-// browsers that can run the library at all support (no :has(), no color-mix()); the container query
-// and its unit are extras with fallbacks.
 const STYLE = `
   .epub-reader {
     --line: rgb(128 128 128 / 0.35);
@@ -80,11 +81,32 @@ const STYLE = `
     padding: 6px 10px; border-bottom: 1px solid var(--line);
   }
   .epub-reader .toolbar[hidden] { display: none; } /* the app may hide it, e.g. on a tap */
-  /* Progress through the book, drawn over the border. */
-  .epub-reader .toolbar::after {
-    content: ''; position: absolute; left: 0; bottom: -1px; width: calc(var(--progress, 0) * 100%); height: 2px;
-    background: var(--fg); opacity: 0.5; transition: width 0.2s;
+  /* Progress through the book, drawn over the border: a slider, to go to another place in it.
+     The line is filled up to the place (from the right, where the pages go to the left).
+     Only its thumb takes the pointer. A touch is given to a control near it: with the whole line
+     taking it, a swipe that began at the top of the page moved the slider, and the place was lost. */
+  .epub-reader .seek {
+    --fill: linear-gradient(to right, var(--fg) calc(var(--progress, 0) * 100%), transparent 0);
+    --thumb: 28px; /* a dot of 12px, with room around it for a finger */
+    position: absolute; left: 0; bottom: calc(var(--thumb) / -2); box-sizing: border-box;
+    width: 100%; height: var(--thumb); margin: 0; padding: 0;
+    -webkit-appearance: none; appearance: none; background: none; pointer-events: none;
   }
+  .epub-reader .seek[dir='rtl'] { --fill: linear-gradient(to left, var(--fg) calc(var(--progress, 0) * 100%), transparent 0); }
+  .epub-reader .seek::-webkit-slider-runnable-track { height: 2px; background: var(--fill); }
+  .epub-reader .seek::-moz-range-track { height: 2px; background: var(--fill); }
+  .epub-reader .seek::-webkit-slider-thumb {
+    -webkit-appearance: none; box-sizing: border-box; width: var(--thumb); height: var(--thumb); margin-top: calc(1px - var(--thumb) / 2);
+    border: 8px solid transparent; border-radius: 50%; background: var(--fg) padding-box; cursor: pointer; pointer-events: auto;
+  }
+  .epub-reader .seek::-moz-range-thumb {
+    box-sizing: border-box; width: var(--thumb); height: var(--thumb);
+    border: 8px solid transparent; border-radius: 50%; background: var(--fg) padding-box; cursor: pointer; pointer-events: auto;
+  }
+  /* The focus is shown on the thumb: the box of the slider is as wide as the toolbar. */
+  .epub-reader .toolbar .seek:focus-visible { outline: none; }
+  .epub-reader .seek:focus-visible::-webkit-slider-thumb { border-color: var(--hover); }
+  .epub-reader .seek:focus-visible::-moz-range-thumb { border-color: var(--hover); }
   .epub-reader :is(.toolbar > :is(button, select, a, label), summary, .panel button) {
     box-sizing: border-box; padding: 6px 10px; border: 0; border-radius: 8px;
     background: none; color: inherit; font: inherit; text-decoration: none; white-space: nowrap; cursor: pointer;
@@ -108,8 +130,8 @@ const STYLE = `
   /* On a narrow screen the room goes to the title; the bar under the toolbar shows the same. */
   @container (max-width: 480px) { .epub-reader .percent { display: none; } }
   .epub-reader .panel {
-    position: absolute; top: calc(100% + 6px); box-sizing: border-box;
-    width: min(26em, 100% - 16px); max-height: 70vh; max-height: calc(100cqh - 100% - 14px); overflow: auto;
+    position: absolute; top: calc(100% + 6px); z-index: 1; /* over the thumb of the slider, which reaches as far down */
+    box-sizing: border-box; width: min(26em, 100% - 16px); max-height: 70vh; max-height: calc(100cqh - 100% - 14px); overflow: auto;
     padding: 6px; border: 1px solid var(--line); border-radius: 12px;
     background: var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / 0.12), 0 12px 32px rgb(0 0 0 / 0.18);
   }
@@ -149,13 +171,7 @@ const STYLE = `
   /* While a menu is open, a cover over the page takes the click that closes it: clicks on the page
      itself stay inside its iframe, and would also turn the page. */
   .epub-reader.menu-open .viewer::after { content: ''; position: absolute; inset: 0; }`;
-/**
- * A ready-made reader UI: toolbar (table of contents, progress, and a settings menu for font size,
- * font, width, writing mode and theme) + EpubViewer, with settings and reading positions saved in
- * a storage. Add your own controls to `toolbar`, and use `viewer` for events and navigation.
- */
 export class EpubReader {
-    /** The toolbar element; add your own buttons or links to it. */
     toolbar;
     viewer;
     #book;
@@ -165,20 +181,13 @@ export class EpubReader {
     #systemDark = matchMedia('(prefers-color-scheme: dark)');
     #settings;
     #positionKey = '';
-    /** The latest call of open(). */
     #opening;
-    /** The document of the section shown (of a fixed-layout book: of one of its pages). */
     #page;
-    /** The section whose entry is marked in the table of contents. */
+    #shown;
     #marked = -1;
-    /**
-     * Marks the root while a menu is open, for the cover over the page. From the `open` attribute
-     * itself: the toggle event comes too late for a click that follows right after the menu opens.
-     */
     #menuObserver = new MutationObserver(() => {
         this.#root.classList.toggle('menu-open', !!this.toolbar.querySelector('details[open]'));
     });
-    /** `root` must have a height; the reader fills it. */
     constructor(root, { storage = defaultStorage(), storageKey = 'epub-viewer', settings = {}, viewer = {} } = {}) {
         const doc = root.ownerDocument;
         if (!doc.getElementById('epub-reader-style')) {
@@ -191,76 +200,58 @@ export class EpubReader {
         this.#storageKey = storageKey;
         this.toolbar = root.querySelector('.toolbar');
         this.viewer = new EpubViewer(root.querySelector('.viewer'), viewer);
-        // Of what is saved, only settings of the right kind: a font size that is not a number could not be changed any more.
         const usable = ([key, value]) => Object.hasOwn(DEFAULT_SETTINGS, key) && typeof value === typeof DEFAULT_SETTINGS[key] && value === value;
         const saved = Object.fromEntries(Object.entries(this.#load('settings') ?? {}).filter(usable));
         this.#settings = { ...DEFAULT_SETTINGS, ...settings, ...saved };
         this.viewer.addEventListener('relocate', (e) => {
-            const { index, page, pages, fraction } = e.detail;
-            // The pages of the section. A fixed-layout book has one page to a section, so there the sections are counted.
+            const { index, page, pages, fraction, rtl } = e.detail;
             const book = this.#book;
             const fixed = book.metadata.layout === 'pre-paginated';
-            this.#part('pages').textContent = fixed ? `${index + 1} / ${book.sections.length}` : `${page + 1} / ${pages}`;
-            this.#part('percent').textContent = `（${Math.round(fraction * 100)}%）`;
-            root.style.setProperty('--progress', String(fraction));
+            this.#shown = [fraction, fixed ? `${index + 1} / ${book.sections.length}` : `${page + 1} / ${pages}`];
+            this.#showProgress(...this.#shown);
+            Object.assign(this.#part('seek'), { value: String(fraction), dir: rtl ? 'rtl' : 'ltr', hidden: false });
             this.#markCurrent(index);
             this.#save(`position:${this.#positionKey}`, this.viewer.location);
-            // For the settings shown: a spread does nothing for vertical text, whose page is as wide as the screen already.
             const vertical = !fixed && this.#page?.defaultView?.getComputedStyle(this.#page.documentElement).writingMode.startsWith('vertical');
             root.dataset.writing = vertical ? 'vertical' : 'horizontal';
         });
         this.viewer.addEventListener('sectionload', (e) => (this.#page = e.detail.doc));
         this.toolbar.addEventListener('click', this.#onClick);
         this.toolbar.addEventListener('change', this.#onChange);
-        // On the document: after a click that opens a menu, the focus is not in the toolbar. The
-        // document gets a key before the window, where the viewer listens.
+        this.toolbar.addEventListener('input', this.#onInput);
         doc.addEventListener('keydown', this.#onKeydown);
-        this.toolbar.addEventListener('toggle', this.#onToggle, true); // toggle does not bubble
-        this.toolbar.addEventListener('submit', (e) => e.preventDefault()); // Enter in the settings form
+        this.toolbar.addEventListener('toggle', this.#onToggle, true);
+        this.toolbar.addEventListener('submit', (e) => e.preventDefault());
         doc.addEventListener('click', this.#dismiss);
         this.#menuObserver.observe(this.toolbar, { attributeFilter: ['open'], subtree: true });
-        this.#systemDark.addEventListener('change', this.#apply); // follow the OS while theme is "system"
+        this.#systemDark.addEventListener('change', this.#apply);
         this.#apply();
     }
-    /** The book being shown. */
     get book() {
         return this.#book;
     }
     get settings() {
         return this.#settings;
     }
-    /**
-     * Changes settings, as the toolbar does: for controls of your own. The changes are saved; only
-     * changed settings are, so that the rest keeps following the initial settings given by the app.
-     */
     setSettings(changes) {
         this.#settings = { ...this.#settings, ...changes };
         this.#save('settings', { ...this.#load('settings'), ...changes });
         this.#apply();
     }
-    /**
-     * Opens a book at `options.location`, the saved position, or the beginning. When called again
-     * before the book is ready, the later call wins, and both give the book of the later call.
-     */
     open(source, options = {}) {
         const opening = this.#open(source, options, () => opening === this.#opening);
         return (this.#opening = opening);
     }
     async #open(source, { key, location }, isLatest) {
         const book = await openBook(source);
-        // Not the latest call any more (or the reader has been destroyed): the book of the latest one is given instead.
         if (!isLatest()) {
             book.destroy();
             return this.#opening ?? book;
         }
-        // The book before is kept until this one is on the screen: if it cannot be shown, that one stays.
         const before = { book: this.#book, key: this.#positionKey };
         this.#book = book;
-        // A File is told by its name, not by `instanceof`: one dropped on the page comes from the iframe's realm.
         const name = typeof source === 'string' || source instanceof URL ? String(source) : source.name;
-        // Not all of a name of any length: it is the book's to choose, and the storage is not the reader's alone to fill.
         this.#positionKey = key ?? (book.metadata.identifier || name || book.metadata.title).slice(0, 200);
-        // What is saved may not be a position (it is not ours alone to write): such a thing is not used.
         const saved = this.#load(`position:${this.#positionKey}`);
         try {
             await this.viewer.open(book, location ?? (typeof saved?.index === 'number' && typeof saved.progress === 'number' ? saved : undefined));
@@ -275,19 +266,18 @@ export class EpubReader {
         if (!isLatest())
             return this.#opening ?? book;
         this.#part('title').textContent = book.metadata.title;
-        this.#root.dataset.layout = book.metadata.layout; // for the settings shown
+        this.#root.dataset.layout = book.metadata.layout;
         this.#renderToc(book);
         if (this.viewer.location)
             this.#markCurrent(this.viewer.location.index);
         return book;
     }
-    /** Removes the reader from `root` and releases the book. */
     destroy() {
         this.#root.ownerDocument.removeEventListener('click', this.#dismiss);
         this.#root.ownerDocument.removeEventListener('keydown', this.#onKeydown);
         this.#systemDark.removeEventListener('change', this.#apply);
         this.#menuObserver.disconnect();
-        this.#opening = undefined; // a book that is still being opened is not shown
+        this.#opening = undefined;
         this.viewer.destroy();
         this.#book?.destroy();
         this.#root.replaceChildren();
@@ -303,12 +293,11 @@ export class EpubReader {
     #apply = () => {
         const settings = this.#settings;
         const name = settings.theme === 'system' ? (this.#systemDark.matches ? 'dark' : 'light') : settings.theme;
-        // A saved setting may be a name that is not known (any more), or one that every object has ("constructor").
         const theme = Object.hasOwn(themes, name) ? themes[name] : themes.light;
         const { style } = this.#root;
         style.setProperty('--bg', theme.background);
         style.setProperty('--fg', theme.color);
-        style.colorScheme = name === 'dark' ? 'dark' : 'light'; // scroll bars etc.
+        style.colorScheme = name === 'dark' ? 'dark' : 'light';
         for (const input of this.toolbar.querySelectorAll('.settings input')) {
             input.checked = input.value === String(settings[input.name]);
         }
@@ -319,42 +308,64 @@ export class EpubReader {
             fontSize: settings.fontSize,
             lineHeight: settings.lineHeight,
             maxWidth: settings.maxWidth,
+            margin: settings.margin,
             writingMode: settings.writingMode,
             spread: settings.spread,
             direction: settings.direction,
         });
     };
     #onClick = (e) => {
-        // The controls of the reader, and buttons added by the app; not other things that it adds (e.g. a text field).
-        const control = e.target.closest('button, summary, .settings input');
+        const control = e.target.closest('button, summary, .settings input, .seek');
         if (control?.matches('.font-up, .font-down')) {
-            const ratio = control.matches('.font-up') ? 1.2 : 1 / 1.2; // equal-looking steps at any size
+            const ratio = control.matches('.font-up') ? 1.2 : 1 / 1.2;
             this.setSettings({ fontSize: Math.min(120, Math.max(12, Math.round(this.#settings.fontSize * ratio))) });
         }
         else if (control?.matches('.toc-list button')) {
             this.#closeMenus();
-            // Reported like a failed page turn, for the app to show.
-            this.viewer.goTo(control.value).catch((error) => {
-                this.viewer.dispatchEvent(new CustomEvent('error', { detail: { error } }));
-            });
+            this.#goTo(control.value);
         }
-        // After a click with the mouse (detail > 0), keys go back to turning pages instead of operating
-        // the control again. Keyboard and remote control users keep their place in the toolbar.
+        else if (control?.matches('.seek') && this.#shown && Number(control.value) === this.#shown[0]) {
+            this.#showProgress(...this.#shown);
+        }
         if (e.detail)
             control?.blur();
     };
+    #showProgress(fraction, pages) {
+        const percent = `${Math.round(fraction * 100)}%`;
+        this.#part('pages').textContent = pages ?? percent;
+        this.#part('percent').textContent = pages ? `（${percent}）` : '';
+        this.#root.style.setProperty('--progress', String(fraction));
+    }
+    #onInput = (e) => {
+        const book = this.#book;
+        if (e.target !== this.#part('seek') || !book)
+            return;
+        const fraction = Number(e.target.value);
+        const count = book.sections.length;
+        this.#showProgress(fraction, book.metadata.layout === 'pre-paginated' ? `${Math.max(1, Math.ceil(fraction * count - 1e-6))} / ${count}` : undefined);
+    };
+    #goTo(target) {
+        this.viewer.goTo(target).catch(this.#report);
+    }
+    #report = (error) => {
+        this.viewer.dispatchEvent(new CustomEvent('error', { detail: { error } }));
+    };
     #onChange = (e) => {
         const input = e.target;
+        if (input === this.#part('seek'))
+            return this.#goTo({ fraction: Number(input.value) });
         if (!(input instanceof HTMLInputElement) || !input.closest('.settings'))
-            return; // e.g. controls added by the app
+            return;
         const key = input.name;
         this.setSettings({ [key]: typeof DEFAULT_SETTINGS[key] === 'number' ? Number(input.value) : input.value });
     };
-    /**
-     * Keys while a menu is open, wherever the focus is. The keys that turn pages are marked with
-     * preventDefault(), so that the viewer leaves them alone: the page behind a menu does not turn.
-     */
     #onKeydown = (e) => {
+        const turn = e.target === this.#part('seek') && !(e.altKey || e.ctrlKey || e.metaKey) && Object.hasOwn(SEEK_KEYS, e.key) && SEEK_KEYS[e.key];
+        if (turn) {
+            e.preventDefault();
+            this.viewer[turn]().catch(this.#report);
+            return;
+        }
         const menu = this.toolbar.querySelector('details[open]');
         if (!menu)
             return;
@@ -366,7 +377,6 @@ export class EpubReader {
         }
         else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && target.matches('.toc-list button')) {
             e.preventDefault();
-            // Headings that lead nowhere (disabled) cannot take the focus: on to the entry after them.
             const step = e.key === 'ArrowDown' ? 'nextElementSibling' : 'previousElementSibling';
             let entry = target[step];
             while (entry?.disabled)
@@ -374,7 +384,7 @@ export class EpubReader {
             entry?.focus();
         }
         else if (/^(Arrow|Page)/.test(e.key) ? !target.matches('input') : e.key === ' ' && !target.closest('button, summary, input')) {
-            e.preventDefault(); // not the arrow keys of the radio buttons, nor Space on a control
+            e.preventDefault();
         }
     };
     #onToggle = (e) => {
@@ -385,17 +395,11 @@ export class EpubReader {
         const current = menu.querySelector('[aria-current]');
         if (!current)
             return;
-        // Center the current chapter in the list. Not scrollIntoView(), which may scroll the host page as well.
         const list = current.parentElement;
         list.scrollTop = current.offsetTop - (list.clientHeight - current.offsetHeight) / 2;
-        // Opened from the keyboard (a mouse click does not leave the focus on the menu): start at the current chapter.
         if (menu.contains(menu.ownerDocument.activeElement))
             current.focus({ preventScroll: true });
     };
-    /**
-     * A click outside of a menu closes it. Not earlier, when the pointer is pressed: with a touch, the
-     * click comes after the finger is lifted, and would go to the page that the closed menu's cover has left.
-     */
     #dismiss = (e) => {
         this.#closeMenus(e.target.closest?.('details'));
     };
@@ -407,7 +411,6 @@ export class EpubReader {
     }
     #renderToc(book) {
         const sectionIndex = new Map(book.sections.map((section, index) => [section.href, index]));
-        // Not a list of arguments (replaceChildren(...buttons)): their number has a limit, which a book can go past.
         const buttons = this.#root.ownerDocument.createDocumentFragment();
         const add = (items, depth) => {
             for (const item of items) {
@@ -420,30 +423,24 @@ export class EpubReader {
             }
         };
         add(book.toc, 0);
-        // A single entry leads nowhere but to the section already shown (e.g. a book of one episode).
         this.#part('toc').hidden = buttons.childElementCount < 2;
         this.#part('toc-list').replaceChildren(buttons);
         this.#marked = -1;
     }
-    /** Marks the table of contents entry that the section at `index` belongs to: the last one at or before it. */
     #markCurrent(index) {
         if (index === this.#marked)
-            return; // called at every page turn; the entry only changes with the section
+            return;
         this.#marked = index;
         let current;
         let best = -1;
         for (const button of this.#part('toc-list').children) {
             button.removeAttribute('aria-current');
             const i = Number(button.dataset.index);
-            // Of several entries for one section, the last one that is for the whole section: where a
-            // chapter is followed by its episodes, the chapter links to the first episode. Entries for a
-            // place inside the section (#...) are not taken: where in the section the page is is not known.
             if (i >= 0 && i <= index && (i > best || (i === best && !button.value.includes('#'))))
                 [current, best] = [button, i];
         }
         current?.setAttribute('aria-current', 'true');
     }
-    // The storage may fail (it is full, or its content is not ours); the reader still works without it.
     #load(name) {
         try {
             return JSON.parse(this.#storage?.getItem(`${this.#storageKey}:${name}`) ?? 'null') ?? undefined;
@@ -459,7 +456,6 @@ export class EpubReader {
         catch { }
     }
 }
-/** localStorage, where the browser lets the page use it (not in some private modes or sandboxed frames). */
 function defaultStorage() {
     try {
         return localStorage;
