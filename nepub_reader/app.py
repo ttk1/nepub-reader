@@ -99,6 +99,8 @@ def go():
         return redirect("/")
     parsed = episodes.parse_url(url)
     if not parsed:
+        if "novel18.syosetu.com" in url.lower():
+            return url_error("ノクターンノベルズなど（novel18.syosetu.com）の作品には対応していません。", url)
         return url_error("対応していない URL です。小説家になろうかカクヨムの、作品か話の URL を入力してください。", url)
 
     site, novel_id, episode = parsed

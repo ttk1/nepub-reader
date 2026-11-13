@@ -39,6 +39,8 @@ KAKUYOMU_ID_PATTERN = re.compile(r"[0-9]{1,30}")
 
 # https:// は省いてもよく、大文字・小文字は区別しない（手で入力した URL や、大文字に変換された URL のため）
 NAROU_URL_PATTERN = re.compile(r"(?:https?://)?ncode\.syosetu\.com/([a-z0-9]+)(?:/(\d+))?/?", re.IGNORECASE)
+# なろうの作品情報のページ（作品ページから「作品情報」で開くページ）。作品ページの URL と同じに扱う
+NAROU_INFO_URL_PATTERN = re.compile(r"(?:https?://)?ncode\.syosetu\.com/novelview/infotop/ncode/([a-z0-9]+)/?", re.IGNORECASE)
 KAKUYOMU_URL_PATTERN = re.compile(r"(?:https?://)?kakuyomu\.jp/works/(\d+)(?:/episodes/(\d+))?/?", re.IGNORECASE)
 
 # 元サイトへのアクセスを同時に 1 つにする（同じ話を二重に取得しないためでもある）
@@ -87,6 +89,8 @@ def parse_url(url: str) -> tuple[str, str, str | None] | None:
     """
     # コピーした URL に付いていることがあるクエリとフラグメントは無視する
     url = re.split(r"[?#]", url.strip())[0]
+    if match := NAROU_INFO_URL_PATTERN.fullmatch(url):
+        return "narou", match[1].lower(), None
     if match := NAROU_URL_PATTERN.fullmatch(url):
         # なろうの作品 ID は大文字・小文字を区別しないので、キャッシュ・履歴が分かれないよう小文字にそろえる
         # 話数の先頭の 0 も同じ理由で取る

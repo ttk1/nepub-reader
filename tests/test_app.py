@@ -124,6 +124,11 @@ class GoTest(AppTestCase):
         self.assertNotIn("<script>alert(1)</script>", body)
         self.assertIn("&lt;script&gt;", body)
 
+    def test_unsupported_site_is_explained(self):
+        res = self.go("https://novel18.syosetu.com/n1234ab/1/")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("novel18.syosetu.com）の作品には対応していません", res.get_data(as_text=True))
+
     def test_invalid_id(self):
         first_episode = self.patch("first_episode")
         self.assertEqual(self.go("https://ncode.syosetu.com/" + "n" * 21 + "/").status_code, 400)

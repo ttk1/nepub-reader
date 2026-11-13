@@ -67,6 +67,9 @@ class ParseUrlTest(unittest.TestCase):
         self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100/episodes/200"), ("kakuyomu", "100", "200"))
         self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100"), ("kakuyomu", "100", None))
 
+    def test_narou_info_page(self):
+        self.assertEqual(episodes.parse_url("https://ncode.syosetu.com/novelview/infotop/ncode/N1234AB/"), ("narou", "n1234ab", None))
+
     def test_scheme_is_optional_and_case_is_ignored(self):
         self.assertEqual(episodes.parse_url("ncode.syosetu.com/n1234ab/12/"), ("narou", "n1234ab", "12"))
         self.assertEqual(episodes.parse_url("HTTPS://NCODE.SYOSETU.COM/N1234AB/12/"), ("narou", "n1234ab", "12"))
@@ -84,6 +87,8 @@ class ParseUrlTest(unittest.TestCase):
             "https://evil.example/https://ncode.syosetu.com/n1234ab/1/",
             "https://ncode.syosetu.com.evil.example/n1234ab/1/",
             "javascript:alert(1)",
+            "https://novel18.syosetu.com/n1234ab/1/",
+            "https://ncode.syosetu.com/novelview/infotop/ncode/n1234ab/extra",
         ]:
             self.assertIsNone(episodes.parse_url(url), url)
 
