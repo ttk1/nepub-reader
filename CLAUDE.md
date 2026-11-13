@@ -22,7 +22,7 @@
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
 | `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | アイコン（ブラウザのタブと、ホーム画面に追加したとき）と全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
-| `tests/` | サーバーのテスト（`test_app.py`・`test_episodes.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）、別々のファイルに書いた同じ値がそろっていることのテスト（`test_static.py`）、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
+| `tests/` | サーバーのテスト（`test_app.py`・`test_episodes.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）、別々のファイルに書いた同じ値がそろっていることのテスト（`test_static.py`）、サプライチェーン対策などの約束ごとが守られていることのテスト（`test_project.py`）、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
 | `.github/workflows/test.yml` | push と PR のたびに、サーバーのテストと読書履歴のテストを GitHub Actions で実行する |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
 
@@ -56,6 +56,8 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
    - 確認例: `git diff --cached | grep -n -i -E '/Users/|/home/|C:[/\\]|@[a-z0-9-]+\.[a-z]+|token|password'`（誤検知は目視で除外）
 
 ## サプライチェーン対策
+
+イメージの digest、アクションのコミット、nepub のコミット、依存が `flask` と `nepub` だけであること、Dockerfile が COPY するものが `.dockerignore` を通ることは、`tests/test_project.py` が確かめている。
 
 - Python の依存は `flask` と `nepub` のみ。`uv.lock` をコミットし、PyPI のパッケージはハッシュで固定する。nepub は `pyproject.toml` でも git のコミットを指定する（`uv lock --upgrade` で未確認の最新コミットに上がらないように）。ビルドは `uv sync --frozen`。
 - `uv.lock` の更新はホストで行わず、Dockerfile と同じ python・uv のイメージに git を入れた一時イメージで、リポジトリをマウントして `uv lock` を実行する。
