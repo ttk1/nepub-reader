@@ -73,7 +73,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 ## 設計メモ・ハマりどころ
 
 - **話の移動**: リーダー画面はページを遷移せずに次/前の話を読み込み、URL は `history.replaceState` で書き換える（リロードで同じ話が開く）。`bookend` / `bookstart` はキーを押すたびに発生するので、読み込み中は `loading` で無視する。
-- **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は再確認しない（キーを押すたびに元サイトへアクセスしないように）。
+- **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は自動では再確認しない（キーを押すたびに元サイトへアクセスしないように）。知らせの「再確認」ボタンを押したときだけ確かめ直す。
 - **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
 - **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。
@@ -82,7 +82,8 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **EPUB の中身**: 書き出しは nepub の `write_epub` に任せる。本文の CSS は nepub 標準のままで、行間などの見た目は epub-viewer の既定と設定に任せ、EPUB 側では上書きしない（キャッシュ済みの EPUB に焼き込まれて後から変えられないため）。
 - **元サイトへのアクセス**: `episodes.py` のロックで同時に 1 つにする（同じ話の二重取得も防ぐ）。作品 ID・話は `is_valid_episode` を通したものだけを、キャッシュのファイル名と元サイトの URL に使う。
 - **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
-- **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。
+- **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
+- **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
 - **トップページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。配色は `index.css` の `:root[data-theme=...]`。
 
 ## ブラウザでの確認

@@ -217,6 +217,10 @@ button[type="submit"]:hover { background: var(--button-hover); }
     opacity: 0.75;
     margin-left: 12px;
 }
+/* スマホ幅でも 3 つのボタンが 1 行に収まるようにする */
+@media (max-width: 480px) {
+    .history-action { padding: 4px 7px; }
+}
 .history-action.danger:hover {
     background: var(--danger-fill);
     border-color: var(--danger-fill);

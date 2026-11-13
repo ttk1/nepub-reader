@@ -65,6 +65,15 @@ class GoTest(AppTestCase):
         self.assertEqual((res.status_code, res.headers["Location"]), (302, "/read/kakuyomu/100/200"))
         first_episode.assert_called_once_with("kakuyomu", "100")
 
+    def test_from_other_sites_only_as_a_page(self):
+        first_episode = self.patch("first_episode", return_value="200")
+        url = {"url": "https://kakuyomu.jp/works/100"}
+        res = self.client.get("/go", query_string=url, headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "image"})
+        self.assertEqual(res.status_code, 403)
+        first_episode.assert_not_called()
+        res = self.client.get("/go", query_string=url, headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "document"})
+        self.assertEqual(res.status_code, 302)
+
     def test_empty_url(self):
         res = self.go("")
         self.assertEqual((res.status_code, res.headers["Location"]), (302, "/"))

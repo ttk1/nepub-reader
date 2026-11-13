@@ -111,6 +111,18 @@ async function findNext() {
   return (current.next = data.next_episode_id)
 }
 
+/** 最新話だと知らせる。その後に公開された話を読めるよう、もう一度確かめるボタンを付ける（押したときだけ元サイトに確認する） */
+function showLatest() {
+  setStatus('最新話です', {
+    label: '再確認',
+    run: () => {
+      if (site === 'narou') current.next = Number(current.episode) + 1
+      else current.rechecked = false
+      turn(true)
+    },
+  })
+}
+
 /** 次の話（forward）か前の話へ移る。次の話は先頭から、前の話は最後のページから表示する */
 const turn = (forward) =>
   whileLoading(async () => {
@@ -118,11 +130,12 @@ const turn = (forward) =>
     try {
       const episode = forward ? await findNext() : current.prev
       if (episode) await show(episode, forward ? START : END)
-      else setStatus(forward ? '最新話です' : '最初の話です')
+      else if (forward) showLatest()
+      else setStatus('最初の話です')
     } catch (e) {
       if (forward && e.status === 404 && site === 'narou') {
         current.next = null // 最新話
-        setStatus('最新話です')
+        showLatest()
       } else {
         setStatus(e.message)
       }

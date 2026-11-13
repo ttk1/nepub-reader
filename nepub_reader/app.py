@@ -38,11 +38,16 @@ def reject_cross_site_requests():
     """ほかのサイトのページから、このサーバーに元サイトへのアクセスをさせない
 
     EPUB と API は、このアプリの画面から（same-origin）か、アドレスバーなどから直接（none）しか呼ばれない。
+    /go は、ほかのサイトからはリンクなどでページとして開く場合だけ通す（画像や fetch としては通さない）。
     Sec-Fetch-Site を送らない古いブラウザは通す。
     """
-    if request.path.startswith(("/epub/", "/api/")):
-        if request.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
-            return "ほかのサイトからは利用できません", 403
+    if request.headers.get("Sec-Fetch-Site", "same-origin") in ("same-origin", "none"):
+        return None
+    if request.path.startswith(("/epub/", "/api/")) or (
+        request.path == "/go" and request.headers.get("Sec-Fetch-Dest") != "document"
+    ):
+        return "ほかのサイトからは利用できません", 403
+    return None
 
 
 @app.after_request

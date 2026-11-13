@@ -1,11 +1,8 @@
-.git
-.gitignore
-.venv
-.claude
-__pycache__
-*.pyc
-*.pyo
-*.egg-info
-epub-cache/
-dev/
-LICENSE
+# Dockerfile が使うものだけをビルドコンテキストに入れる
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!nepub_reader/
+**/__pycache__/
+**/*.pyc
