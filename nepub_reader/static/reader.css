@@ -17,18 +17,22 @@ body { margin: 0; overscroll-behavior: none; }
 /* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */
 #status {
     position: fixed;
-    left: 50%;
+    /* 左右の端から 16px 以内に収め、中身の幅で中央に置く。
+       （left: 50% と transform で中央に寄せると、幅が画面の半分までしか広がらず、狭い画面で文が細かく折れる） */
+    left: 16px;
+    right: 16px;
     bottom: 24px;
-    transform: translateX(-50%);
+    width: fit-content;
+    margin: 0 auto;
     z-index: 10;
     display: flex;
     align-items: center;
     gap: 12px;
     box-sizing: border-box;
-    max-width: calc(100% - 32px);
     padding: 8px 18px;
     border: 1px solid rgb(128 128 128 / 0.4);
-    border-radius: 999px;
+    /* 1 行のときは両端が丸くなり、長い文が折れたときは角の丸い四角になる */
+    border-radius: 20px;
     background: rgb(32 32 32 / 0.92);
     color: #f0f0f0;
     font: 14px/1.4 system-ui, sans-serif;
@@ -45,6 +49,8 @@ body { margin: 0; overscroll-behavior: none; }
     color: inherit;
     font: inherit;
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
     pointer-events: auto;
 }
 #status button:hover { background: rgb(255 255 255 / 0.15); }
