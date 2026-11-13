@@ -23,6 +23,7 @@
 | `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | ホーム画面に追加したときのアイコンと全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
 | `tests/` | サーバーのテスト（`test_*.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）と、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
+| `.github/workflows/test.yml` | push と PR のたびに、サーバーのテストと読書履歴のテストを GitHub Actions で実行する |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
 
 ルート: `/read/<site>/<作品 ID>/<話>` がリーダー画面、`/epub/<site>/<作品 ID>/<話>` が 1 話分の EPUB、`/api/kakuyomu/next-episode/...` がカクヨムの最新話の再確認、`/go?url=` が元サイトの URL からリーダー画面への移動。`<話>` はなろうなら話数、カクヨムならエピソード ID。
@@ -58,7 +59,8 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 - Python の依存は `flask` と `nepub` のみ。`uv.lock` をコミットし、PyPI のパッケージはハッシュで固定する。nepub は `pyproject.toml` でも git のコミットを指定する（`uv lock --upgrade` で未確認の最新コミットに上がらないように）。ビルドは `uv sync --frozen`。
 - `uv.lock` の更新はホストで行わず、Dockerfile と同じ python・uv のイメージに git を入れた一時イメージで、リポジトリをマウントして `uv lock` を実行する。
-- Docker イメージ（python・uv）はバージョンと digest（`@sha256:...`）で固定する。
+- Docker イメージ（python・uv、GitHub Actions で使う node）はバージョンと digest（`@sha256:...`）で固定する。
+- GitHub Actions のアクションは、タグではなくコミット（40 桁の SHA）で固定し、どの版かをコメントに書く。コミットは `https://api.github.com/repos/<owner>/<repo>/commits/<タグ>` の `sha` で確かめる。ワークフローの権限は `contents: read` だけにする。
 - 依存とイメージが古くなっていないかは、ときどき確かめる: 固定している版の脆弱性の報告は `https://pypi.org/pypi/<pkg>/<version>/json` の `vulnerabilities`、python のイメージのタグと更新日は `https://hub.docker.com/v2/repositories/library/python/tags?name=3.12.`、uv は GitHub のリリース一覧で分かる。Python 3.12 はセキュリティ修正だけの系列なので、新しい版が出ていたら上げる。
 - Docker Hub の応答には、タグの digest（`digest`）と、アーキテクチャごとのイメージの digest（`images[].digest`）がある。Dockerfile に書くのはタグの digest で、`docker inspect` の `RepoDigests` と一致する。
 - 依存・イメージを追加・更新するときは:
