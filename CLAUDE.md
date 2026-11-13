@@ -16,7 +16,7 @@
 | `nepub_reader/episodes.py` | 話の取得と EPUB 生成（nepub）、キャッシュ、元サイトの URL の解釈。Flask には依存しない |
 | `nepub_reader/templates/` | トップページ（`index.html`）とリーダー画面（`reader.html`）の HTML。CSS と JS は `static/` に置く |
 | `nepub_reader/static/index.js` / `index.css` | トップページ。読書履歴の一覧・削除・インポート・エクスポート |
-| `nepub_reader/static/theme.js` | トップページの配色をリーダーのテーマに合わせる（描画前に動かすので通常のスクリプト） |
+| `nepub_reader/static/theme.js` | ページのテーマを、リーダーで選んだテーマに合わせる（描画前に動かすので通常のスクリプト）。トップページの配色と、リーダーの準備ができるまでの背景に使う |
 | `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
@@ -99,7 +99,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 500ms になる（約 3 割）。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
-- **トップページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。配色は `index.css` の `:root[data-theme=...]`。
+- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。
 
 ## ブラウザでの確認
 

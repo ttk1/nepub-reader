@@ -2,6 +2,10 @@
 
 /* overscroll-behavior: スマートフォンで縦に指を動かしても「引っ張って更新」が働かないように */
 body { margin: 0; overscroll-behavior: none; }
+/* リーダーの準備ができるまでの背景。選んであるテーマの色にして、開いた直後に白く光らないようにする
+   （theme.js が <html data-theme> を決める。色は epub-viewer の themes と同じ） */
+:root[data-theme="sepia"] body { background: #f4ecd8; }
+:root[data-theme="dark"] body { background: #000000; }
 /* dvh が使えない古いブラウザ向けに vh を併記する */
 #reader { height: 100vh; height: 100dvh; }
 
