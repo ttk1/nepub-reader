@@ -135,7 +135,7 @@ body {
     gap: 10px;
     flex-wrap: wrap;
 }
-input[type="url"] {
+#url-input {
     flex: 1;
     min-width: 240px;
     padding: 10px 14px;
@@ -146,8 +146,8 @@ input[type="url"] {
     color: var(--text-color);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-input[type="url"]::placeholder { color: var(--text-secondary); opacity: 0.7; }
-input[type="url"]:focus {
+#url-input::placeholder { color: var(--text-secondary); opacity: 0.7; }
+#url-input:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--focus-ring);

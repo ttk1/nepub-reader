@@ -36,8 +36,9 @@ NAROU_EPISODE_PATTERN = re.compile(r"[1-9][0-9]{0,4}")
 MAX_NAROU_EPISODE = 10000
 KAKUYOMU_ID_PATTERN = re.compile(r"[0-9]{1,30}")
 
-NAROU_URL_PATTERN = re.compile(r"https?://ncode\.syosetu\.com/([a-zA-Z0-9]+)(?:/(\d+))?/?")
-KAKUYOMU_URL_PATTERN = re.compile(r"https?://kakuyomu\.jp/works/(\d+)(?:/episodes/(\d+))?/?")
+# https:// は省いてもよく、大文字・小文字は区別しない（手で入力した URL や、大文字に変換された URL のため）
+NAROU_URL_PATTERN = re.compile(r"(?:https?://)?ncode\.syosetu\.com/([a-z0-9]+)(?:/(\d+))?/?", re.IGNORECASE)
+KAKUYOMU_URL_PATTERN = re.compile(r"(?:https?://)?kakuyomu\.jp/works/(\d+)(?:/episodes/(\d+))?/?", re.IGNORECASE)
 
 # 元サイトへのアクセスを同時に 1 つにする（同じ話を二重に取得しないためでもある）
 _fetch_lock = threading.Lock()

@@ -57,6 +57,11 @@ class ParseUrlTest(unittest.TestCase):
         self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100/episodes/200"), ("kakuyomu", "100", "200"))
         self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100"), ("kakuyomu", "100", None))
 
+    def test_scheme_is_optional_and_case_is_ignored(self):
+        self.assertEqual(episodes.parse_url("ncode.syosetu.com/n1234ab/12/"), ("narou", "n1234ab", "12"))
+        self.assertEqual(episodes.parse_url("HTTPS://NCODE.SYOSETU.COM/N1234AB/12/"), ("narou", "n1234ab", "12"))
+        self.assertEqual(episodes.parse_url("Kakuyomu.jp/Works/100/Episodes/200"), ("kakuyomu", "100", "200"))
+
     def test_query_and_fragment_are_ignored(self):
         self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100/episodes/200?x=1#p3"), ("kakuyomu", "100", "200"))
 

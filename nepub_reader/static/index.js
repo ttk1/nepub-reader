@@ -136,7 +136,11 @@ async function importHistory(file) {
     notify('読み込める履歴がありませんでした')
     return
   }
-  updateHistory(mergeHistory(getHistory(), items), `${items.length} 件の履歴を取り込みました`)
+  const merged = mergeHistory(getHistory(), items)
+  updateHistory(merged, `${items.length} 件の履歴を取り込みました`)
+  // 履歴に残せる数には上限がある。あふれた分があれば伝える
+  const kept = getHistory().length
+  if (kept < merged.length) notify(`${items.length} 件の履歴を取り込みました（新しい順に ${kept} 件を残しています）`)
 }
 
 exportButton.addEventListener('click', exportHistory)

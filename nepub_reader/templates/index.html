@@ -19,7 +19,7 @@
             <form action="/go" method="get" id="url-form">
                 <label class="field-label" for="url-input">作品 URL を入力</label>
                 <div class="form-row">
-                    <input type="url" id="url-input" name="url" value="{{ url or '' }}" placeholder="https://ncode.syosetu.com/nXXXXXX/" required>
+                    <input type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" id="url-input" name="url" value="{{ url or '' }}" placeholder="https://ncode.syosetu.com/nXXXXXX/" required>
                     <button type="submit">読む</button>
                 </div>
             </form>
