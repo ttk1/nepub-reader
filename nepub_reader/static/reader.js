@@ -73,13 +73,17 @@ function setStatus(text, action) {
 let current
 // 話の読み込み中は、次の操作を受け付けない（bookend / bookstart はキーを押すたびに発生する）
 let loading = false
+// 「読み込み中…」を出すまでの時間。キャッシュ済みの話はすぐ開くので、そのたびに知らせが一瞬出て消えるのを避ける
+const LOADING_NOTICE_MS = 300
 
 async function whileLoading(task) {
   if (loading) return
   loading = true
+  const notice = setTimeout(() => setStatus('読み込み中…'), LOADING_NOTICE_MS)
   try {
     await task()
   } finally {
+    clearTimeout(notice)
     loading = false
   }
 }
@@ -101,7 +105,6 @@ async function fetchEpub(episode) {
 
 /** 話を表示する。location を省略すると、保存された読書位置（なければ先頭）から */
 async function show(episode, location = savedPosition(site, novelId, episode)) {
-  setStatus('読み込み中…')
   const res = await fetchEpub(episode)
   // EpubReader のエラーは英語なので、何が起きたかを前に付ける
   const book = await reader.open(await res.blob(), { location: location ?? START }).catch((e) => {
