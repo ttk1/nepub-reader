@@ -22,7 +22,7 @@
 | `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
 | `nepub_reader/static/manifest.json`、`icon.svg`、`icon-*.png`、`apple-touch-icon.png` | アイコン（ブラウザのタブと、ホーム画面に追加したとき）と全画面表示（ウェブアプリのマニフェスト）。PNG は `icon.svg` から書き出したもの |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
-| `tests/` | サーバーのテスト（`test_*.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）と、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
+| `tests/` | サーバーのテスト（`test_app.py`・`test_episodes.py`。標準ライブラリの `unittest`。元サイトへはアクセスしない）、別々のファイルに書いた同じ値がそろっていることのテスト（`test_static.py`）、読書履歴のテスト（`history.test.mjs`。Node.js 標準のテストランナー） |
 | `.github/workflows/test.yml` | push と PR のたびに、サーバーのテストと読書履歴のテストを GitHub Actions で実行する |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外）。`<版>/<site>/<作品 ID>_<話>.epub` |
 
@@ -112,7 +112,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
 - **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
 - **トップページの一覧の更新**: ブラウザの「戻る」で戻ったとき（`pageshow` の `persisted`）と、ほかのタブで履歴が変わったとき（`storage`）に描き直す。
-- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
+- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いている（`tests/test_static.py` が一致を確かめている。epub-viewer の更新で色が変わったら、このテストが失敗する）。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
 - **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
 
 ### セキュリティと配布
