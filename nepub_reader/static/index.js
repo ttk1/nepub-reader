@@ -151,6 +151,8 @@ clearButton.addEventListener('click', () => {
 
 // URL を送信したら、画面が変わるまでボタンを押せなくする（二重に送信しないように）
 const form = document.getElementById('url-form')
+// すぐ URL を貼れるよう入力欄にフォーカスする。タッチ操作の端末では、開くたびにキーボードが出てしまうのでしない
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) document.getElementById('url-input').focus()
 const submitButton = form.querySelector('button[type="submit"]')
 form.addEventListener('submit', () => {
   submitButton.disabled = true
