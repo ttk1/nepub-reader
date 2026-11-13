@@ -12,6 +12,7 @@ import re
 import shutil
 import threading
 import time
+import urllib.error
 import zipfile
 from pathlib import Path
 from typing import TypedDict
@@ -58,7 +59,7 @@ def _get_page(url: str) -> str:
 
 
 class Adjacent(TypedDict):
-    """カクヨムの前後の話のエピソード ID（ないときは None）"""
+    """前後の話（ないときは None）。カクヨムはエピソード ID。なろうは短編のときだけ返し、どちらも None"""
 
     prev: str | None
     next: str | None
@@ -108,7 +109,8 @@ def first_episode(site: str, novel_id: str) -> str | None:
 def get_epub(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | None]:
     """1 話分の EPUB のパスを返す。キャッシュになければ元サイトから取得して作る
 
-    カクヨムは前後の話も返す（なろうは話数 ±1 なので None）。
+    カクヨムは前後の話も返す。なろうは話数 ±1 なので None だが、短編（話に分かれていない作品。
+    1 話として扱う）のときは、前後の話がないことを返す。
     """
     # キャッシュ済みの話は、ほかの話の取得を待たずに返す
     return _cached(site, novel_id, episode) or _fetch(site, novel_id, episode)
@@ -118,7 +120,7 @@ def refresh_kakuyomu_adjacent(work_id: str, episode_id: str) -> Adjacent:
     """カクヨムの話のページを取得し直して、前後の話を最新にする（本文の EPUB はそのまま使う）"""
     with _fetch_lock:
         adjacent = _extract_adjacent(_get_page(_episode_url("kakuyomu", work_id, episode_id)))
-        _write_adjacent(work_id, episode_id, adjacent)
+        _write_adjacent("kakuyomu", work_id, episode_id, adjacent)
     return adjacent
 
 
@@ -166,9 +168,9 @@ def _prune_cache() -> None:
         pass
 
 
-def _adjacent_path(work_id: str, episode_id: str) -> Path:
+def _adjacent_path(site: str, novel_id: str, episode: str) -> Path:
     """前後の話の保存先。EPUB とは別に持ち、次の話が公開されたときにこれだけ更新する"""
-    return _cache_path("kakuyomu", work_id, episode_id).with_suffix(".nav.json")
+    return _cache_path(site, novel_id, episode).with_suffix(".nav.json")
 
 
 def _episode_url(site: str, novel_id: str, episode: str) -> str:
@@ -188,10 +190,10 @@ def _cached(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | No
         os.utime(path)
     except OSError:
         pass  # 読み取り専用のキャッシュなど。あるものは使う
+    adjacent = _read_adjacent(site, novel_id, episode)
     if site == "narou":
-        return path, None
+        return path, adjacent  # 短編のときだけ、前後の話（なし）が保存されている
     # 前後の話が読めないカクヨムの話は、キャッシュがないものとして作り直す
-    adjacent = _read_adjacent(novel_id, episode)
     return (path, adjacent) if adjacent else None
 
 
@@ -201,8 +203,17 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
         if cached := _cached(site, novel_id, episode):
             return cached
 
-        page = _get_page(_episode_url(site, novel_id, episode))
-        parser = _parse_episode(site, page)
+        adjacent = None
+        try:
+            page = _get_page(_episode_url(site, novel_id, episode))
+            parser = _parse_episode(site, page)
+        except urllib.error.HTTPError as e:
+            # なろうの短編は話のページがなく、作品ページに本文がある。1 話として扱う
+            short_story = _fetch_narou_short_story(novel_id) if site == "narou" and episode == "1" and e.code == 404 else None
+            if not short_story:
+                raise
+            page, parser = short_story
+            adjacent = {"prev": None, "next": None}
         # 本文が取れないとき（ページ構造の変更、削除された作品など）に、壊れた EPUB をキャッシュしない
         if not parser.paragraphs:
             raise ValueError("本文を抽出できませんでした")
@@ -210,12 +221,22 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
         path = _cache_path(site, novel_id, episode)
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_episode_epub(path, site, novel_id, episode, _novel_title(site, page, parser) or novel_id, parser)
-        adjacent = None
         if site == "kakuyomu":
             adjacent = _extract_adjacent(page)
-            _write_adjacent(novel_id, episode, adjacent)
+        if adjacent:
+            _write_adjacent(site, novel_id, episode, adjacent)
         _prune_cache()
         return path, adjacent
+
+
+def _fetch_narou_short_story(novel_id: str) -> tuple[str, NarouEpisodeParser] | None:
+    """なろうの作品ページを話として読む。本文があれば短編（連載の作品ページには本文がない）"""
+    try:
+        page = _get_page(f"https://ncode.syosetu.com/{novel_id}/")
+    except urllib.error.HTTPError:
+        return None  # 作品そのものがない
+    parser = _parse_episode("narou", page)
+    return (page, parser) if parser.paragraphs else None
 
 
 def _parse_episode(site: str, page: str) -> NarouEpisodeParser:
@@ -318,16 +339,16 @@ def _extract_adjacent(page: str) -> Adjacent:
     return {"prev": episode_id("contentMain-readPreviousEpisode"), "next": episode_id("contentMain-readNextEpisode")}
 
 
-def _read_adjacent(work_id: str, episode_id: str) -> Adjacent | None:
+def _read_adjacent(site: str, novel_id: str, episode: str) -> Adjacent | None:
     try:
-        data = json.loads(_adjacent_path(work_id, episode_id).read_text(encoding="utf-8"))
+        data = json.loads(_adjacent_path(site, novel_id, episode).read_text(encoding="utf-8"))
         return {"prev": data["prev"], "next": data["next"]}
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
 
-def _write_adjacent(work_id: str, episode_id: str, adjacent: Adjacent) -> None:
-    path = _adjacent_path(work_id, episode_id)
+def _write_adjacent(site: str, novel_id: str, episode: str, adjacent: Adjacent) -> None:
+    path = _adjacent_path(site, novel_id, episode)
     path.parent.mkdir(parents=True, exist_ok=True)
     # 書きかけのファイルが読まれないよう、別名で書いてから置き換える
     tmp_path = path.with_suffix(".tmp")

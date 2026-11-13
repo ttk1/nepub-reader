@@ -2,7 +2,7 @@
 // 最初のページから戻ると前の話（の最後のページ）をページ遷移なしで読み込む。
 import { EpubReader } from './epub-viewer/index.js'
 import { READER_STORAGE_KEY, recordHistory, savePosition, savedPosition } from './history.js'
-import { episodeUrl, siteName } from './sites.js'
+import { episodeUrl, novelUrl, siteName } from './sites.js'
 
 // URL はサーバー側で検証済み（/read/<site>/<作品 ID>/<話>。話はなろうなら話数、カクヨムならエピソード ID）
 const [, site, novelId, firstEpisode] = location.pathname.split('/').slice(1)
@@ -65,7 +65,7 @@ function setStatus(text, action) {
 
 // ---- 話の表示 ----
 
-/** 表示中の話と前後の話（null = ない。なろうの次話は開いてみるまで分からない） */
+/** 表示中の話と前後の話（null = ない。なろうの次話は開いてみるまで分からない）。short は、なろうの短編（話に分かれていない作品） */
 let current
 // 話の読み込み中は、次の操作を受け付けない（bookend / bookstart はキーを押すたびに発生する）
 let loading = false
@@ -105,18 +105,20 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
   })
 
   const n = Number(episode)
-  current =
-    site === 'narou'
-      ? { episode, prev: n > 1 ? n - 1 : null, next: n + 1 }
-      : { episode, prev: res.headers.get('X-Prev-Episode') || null, next: res.headers.get('X-Next-Episode') || null }
+  // サーバーは、カクヨムと、なろうの短編（1 話として扱う）のときに、前後の話をヘッダーで返す
+  const adjacent = res.headers.has('X-Next-Episode')
+  current = adjacent
+    ? { episode, prev: res.headers.get('X-Prev-Episode') || null, next: res.headers.get('X-Next-Episode') || null, short: site === 'narou' }
+    : { episode, prev: n > 1 ? n - 1 : null, next: n + 1 }
 
   const novelTitle = book.metadata.title
-  const episodeTitle = book.toc[0]?.label ?? ''
-  title.textContent = `${novelTitle}　${episodeTitle}`
+  // 短編は話タイトルが作品名と同じなので、出さない
+  const episodeTitle = current.short ? '' : (book.toc[0]?.label ?? '')
+  title.textContent = [novelTitle, episodeTitle].filter(Boolean).join('　')
   title.title = title.textContent // 長くて省略されたときに、全体を確かめられるように
-  document.title = `${episodeTitle} - ${novelTitle}`
+  document.title = [episodeTitle, novelTitle].filter(Boolean).join(' - ')
   prevButton.disabled = !current.prev
-  sourceLink.href = episodeUrl(site, novelId, episode)
+  sourceLink.href = current.short ? novelUrl(site, novelId) : episodeUrl(site, novelId, episode)
   // リロードしても同じ話が開くようにする
   history.replaceState(null, '', `/read/${site}/${novelId}/${episode}`)
   recordHistory({
@@ -163,6 +165,7 @@ const turn = (forward) =>
     try {
       const episode = forward ? await findNext() : current.prev
       if (episode) await show(episode, forward ? START : END)
+      else if (forward && current.short) setStatus('短編です（次の話はありません）')
       else if (forward) showLatest(current.nextError) // 確認に失敗していたら、最新話とは言わない
       else setStatus('最初の話です')
     } catch (e) {

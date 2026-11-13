@@ -55,7 +55,7 @@ docker run -p 127.0.0.1:5000:5000 -v nepub-cache:/app/epub-cache nepub-reader
 - **小説家になろう**
   - 話の URL（`https://ncode.syosetu.com/nXXXXXX/1/`）→ その話から開始
   - 作品ページの URL（`https://ncode.syosetu.com/nXXXXXX/`）→ 1 話から開始
-  - 短編（話に分かれていない作品）には対応していません
+  - 短編（話に分かれていない作品）は、作品ページの URL で開けます
 - **カクヨム**
   - 話の URL（`https://kakuyomu.jp/works/XXXXX/episodes/XXXXX`）→ その話から開始
   - 作品ページの URL（`https://kakuyomu.jp/works/XXXXX`）→ 最初の話から開始

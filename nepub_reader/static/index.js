@@ -42,8 +42,8 @@ const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.l
 function historyItem(item) {
   const site = item.site || 'narou'
   const openInSite = `${siteName(site)}で作品ページを開く`
-  // カクヨムの last_episode はエピソード ID なので話数は出せない
-  const meta = [site === 'narou' && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
+  // カクヨムの last_episode はエピソード ID なので話数は出せない。話タイトルのない履歴（なろうの短編）にも出さない
+  const meta = [site === 'narou' && item.episode_title && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
 
   const link = el(
     'a',

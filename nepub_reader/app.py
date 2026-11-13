@@ -135,7 +135,8 @@ def read_episode(site: str, novel_id: str, episode: str):
 def episode_epub(site: str, novel_id: str, episode: str):
     """1 話分の EPUB を返す（なければ取得・生成してキャッシュする）
 
-    カクヨムは前後の話の ID をヘッダーで返す（なろうは話数 ±1 なので不要）。
+    カクヨムは前後の話の ID をヘッダーで返す。なろうは話数 ±1 なので返さないが、
+    短編のときだけ、前後の話がないことを（空の）ヘッダーで返す。
     """
     if not episodes.is_valid_episode(site, novel_id, episode):
         return "無効な URL です", 404
@@ -146,9 +147,6 @@ def episode_epub(site: str, novel_id: str, episode: str):
     except urllib.error.HTTPError as e:
         logging.error(f"話の取得エラー: {target}, status={e.code}")
         if e.code == 404:
-            if site == "narou" and episode == "1":
-                # 作品ページの URL から開いた場合など。短編は話のページがないので、ここに来る
-                return "1 話が見つかりませんでした（短編には対応していません）", 404
             return "話が見つかりませんでした", 404
         return "話の取得に失敗しました", 502
     except OSError as e:

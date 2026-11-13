@@ -17,6 +17,16 @@ NAROU_PAGE = """<html><head><title>作品 &amp; 名 - 第12話 はじまり</tit
 <div><p id="L1">　本文です。</p><p id="L2"><ruby>漢字<rt>かんじ</rt></ruby>の段落</p></div>
 </body></html>"""
 
+NAROU_SHORT_STORY_PAGE = """<html><head><title> 短編の題</title></head><body>
+<h1 class="p-novel__title">短編の題</h1>
+<div><p id="L1">　短編の本文です。</p></div>
+</body></html>"""
+
+NAROU_INDEX_PAGE = """<html><head><title>連載の題</title></head><body>
+<h1 class="p-novel__title">連載の題</h1>
+<a class="p-eplist__subtitle" href="/n1234ab/1/">第1話</a>
+</body></html>"""
+
 KAKUYOMU_PAGE = """<html><head><title>第1話 旅立ち - 作品名（作者名） - カクヨム</title></head><body>
 <p class="widget-episodeTitle">第1話 旅立ち</p>
 <div><p id="p1">本文です。</p></div>
@@ -193,6 +203,40 @@ class GetEpubTest(CacheTestCase):
         with self.assertLogs(level="WARNING"):
             path, _ = episodes.get_epub("narou", "n1234ab", "5")
         self.assertIn("本文です。", read_epub(path, "src/text/5.xhtml"))
+
+    def test_narou_short_story_is_read_as_the_first_episode(self):
+        # 短編は話のページがなく（1 話の URL は 404）、作品ページに本文がある
+        not_found = urllib.error.HTTPError("", 404, "Not Found", None, None)
+        self.pages["https://ncode.syosetu.com/n1234ab/1/"] = not_found
+        self.pages["https://ncode.syosetu.com/n1234ab/"] = NAROU_SHORT_STORY_PAGE
+        path, adjacent = episodes.get_epub("narou", "n1234ab", "1")
+
+        self.assertEqual(adjacent, {"prev": None, "next": None})
+        self.assertIn("<dc:title id=\"title\">短編の題</dc:title>", read_epub(path, "src/content.opf"))
+        self.assertIn("短編の本文です。", read_epub(path, "src/text/1.xhtml"))
+        # キャッシュからも、前後の話がないことが返る
+        self.assertEqual(episodes.get_epub("narou", "n1234ab", "1"), (path, adjacent))
+        self.assertEqual(len(self.fetched), 2)
+
+    def test_narou_missing_episode_is_not_taken_for_a_short_story(self):
+        not_found = urllib.error.HTTPError("", 404, "Not Found", None, None)
+        # 連載の作品ページには本文がない
+        self.pages["https://ncode.syosetu.com/n1234ab/1/"] = not_found
+        self.pages["https://ncode.syosetu.com/n1234ab/"] = NAROU_INDEX_PAGE
+        with self.assertRaises(urllib.error.HTTPError):
+            episodes.get_epub("narou", "n1234ab", "1")
+        # 作品そのものがない
+        self.pages["https://ncode.syosetu.com/n9999zz/1/"] = not_found
+        self.pages["https://ncode.syosetu.com/n9999zz/"] = not_found
+        with self.assertRaises(urllib.error.HTTPError):
+            episodes.get_epub("narou", "n9999zz", "1")
+        # 2 話以降が 404 でも、作品ページは見に行かない
+        self.pages["https://ncode.syosetu.com/n1234ab/2/"] = not_found
+        fetched = len(self.fetched)
+        with self.assertRaises(urllib.error.HTTPError):
+            episodes.get_epub("narou", "n1234ab", "2")
+        self.assertEqual(len(self.fetched), fetched + 1)
+        self.assertEqual(list(self.cache_dir.rglob("*.*")), [])
 
     def test_cached_episode_is_not_fetched_again(self):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
