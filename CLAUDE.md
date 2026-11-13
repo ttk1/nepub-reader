@@ -79,7 +79,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
 - **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
-- **`open()` の時間切れ**: EpubReader の `open()` は、本文のフレームをページの CSP が止めたときなどに終わらないことがある（Firefox は `frame-src` に blob: がないとき、WebKit はそれに加えて `frame-ancestors 'none'` のとき）。`reader.js` は 30 秒で打ち切ってエラーを出す。
+- **epub-viewer の不具合は epub-viewer で直す**: 同梱の epub-viewer の不具合を見つけたら、こちらに回避策を入れずに、再現条件と原因をまとめて報告する（ユーザーの方針）。
 - **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。ページをめくると消すが、ツールバーの出し入れでも `relocate` が発生するので、その分は `relayout` で見分けて消さない。
 - **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。
 - **EPUB のメタデータ**: 作品名は `book.metadata.title`、話タイトルは `book.toc[0].label`。

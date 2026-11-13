@@ -19,10 +19,6 @@ const settingsStorage = {
   },
 }
 
-// 話を開くのを待つ時間の上限。EpubReader の open() は、本文のフレームをページの CSP が止めたときなどに
-// 終わらないことがあるので、待ち続けて操作を受け付けなくなるのを防ぐ
-const OPEN_TIMEOUT_MS = 30000
-
 const el = (tag, props, ...children) => {
   const element = Object.assign(document.createElement(tag), props)
   element.append(...children)
@@ -83,8 +79,7 @@ async function fetchEpub(episode) {
 async function show(episode, location = savedPosition(site, novelId, episode)) {
   setStatus('読み込み中…')
   const res = await fetchEpub(episode)
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('話を表示できませんでした')), OPEN_TIMEOUT_MS))
-  const book = await Promise.race([reader.open(await res.blob(), { location: location ?? START }), timeout])
+  const book = await reader.open(await res.blob(), { location: location ?? START })
 
   const n = Number(episode)
   current =
