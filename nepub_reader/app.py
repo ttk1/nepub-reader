@@ -20,6 +20,7 @@ app = Flask(__name__)
 READER_MODULES = [
     "reader.js",
     "history.js",
+    "sites.js",
     *sorted(f"epub-viewer/{path.name}" for path in Path(app.static_folder, "epub-viewer").glob("*.js")),
 ]
 

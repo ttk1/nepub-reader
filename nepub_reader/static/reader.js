@@ -2,6 +2,7 @@
 // 最初のページから戻ると前の話（の最後のページ）をページ遷移なしで読み込む。
 import { EpubReader } from './epub-viewer/index.js'
 import { READER_STORAGE_KEY, recordHistory, savePosition, savedPosition } from './history.js'
+import { episodeUrl, siteName } from './sites.js'
 
 // URL はサーバー側で検証済み（/read/<site>/<作品 ID>/<話>。話はなろうなら話数、カクヨムならエピソード ID）
 const [, site, novelId, firstEpisode] = location.pathname.split('/').slice(1)
@@ -9,6 +10,19 @@ const [, site, novelId, firstEpisode] = location.pathname.split('/').slice(1)
 // 話の先頭と、最後のページ（index: -1 = 最後のセクション）
 const START = { index: 0, progress: 0 }
 const END = { index: -1, progress: 1 }
+
+// nepub は話タイトルを大きな文字にし、上下に 2 文字分ずつ余白を取る。高さの低い画面（横向きのスマートフォンなど）では
+// 余白だけでページが埋まり、1 行に 1 文字しか入らなくなるので、そのときだけ文字と余白を小さくする。
+// EPUB には書き込まず表示のときに足すので、キャッシュ済みの話にも効き、後から変えられる
+const PAGE_STYLE = '@media (max-height: 500px) { h1 { margin-top: 0.5em; margin-bottom: 0.5em; font-size: 1.4em; } }'
+
+const el = (tag, props, ...children) => {
+  const element = Object.assign(document.createElement(tag), props)
+  element.append(...children)
+  return element
+}
+
+// ---- 画面の部品 ----
 
 // EpubReader には表示設定だけを保存させる。読書位置は読書履歴と一緒に持つ（history.js）ので、保存させない
 const SETTINGS_KEY = `${READER_STORAGE_KEY}:settings`
@@ -22,12 +36,6 @@ const settingsStorage = {
   },
 }
 
-const el = (tag, props, ...children) => {
-  const element = Object.assign(document.createElement(tag), props)
-  element.append(...children)
-  return element
-}
-
 // EpubReader の既定の文字サイズ（45px）は、離れて読む大きな画面向け。スマートフォンでは 1 ページに
 // 数文字しか入らないので、狭い画面では初期値を小さくする（利用者が変えた後は、その値が使われる）。
 // 横向きのスマートフォンは幅が広いので、高さでも見る
@@ -38,13 +46,13 @@ const { toolbar, viewer } = reader
 const title = toolbar.querySelector('.title')
 
 // 「前の話」「次の話」。狭い画面では「の」を隠して短くする（reader.css）
-const episodeButton = (word, forward) =>
-  el('button', { type: 'button', title: `${word}の話（${forward ? 'N' : 'P'} キー）`, onclick: () => turn(forward) }, word, el('span', { className: 'wide', textContent: 'の' }), '話')
-const prevButton = episodeButton('前', false)
-const nextButton = episodeButton('次', true)
+const episodeButton = (word, key, forward) =>
+  el('button', { type: 'button', title: `${word}の話（${key} キー）`, onclick: () => turn(forward) }, word, el('span', { className: 'wide', textContent: 'の' }), '話')
+const prevButton = episodeButton('前', 'P', false)
+const nextButton = episodeButton('次', 'N', true)
 toolbar.prepend(el('a', { href: '/', textContent: 'トップ' }), prevButton, nextButton)
 // 読んでいる話の、元サイトのページへのリンク（感想を書く、ブックマークする、など）。狭い画面では出さない（reader.css）
-const sourceLink = toolbar.appendChild(el('a', { className: 'source', textContent: '元ページ', target: '_blank', rel: 'noopener noreferrer' }))
+const sourceLink = toolbar.appendChild(el('a', { className: 'source', textContent: '元ページ', target: '_blank', rel: 'noopener noreferrer', title: `${siteName(site)}でこの話を開く` }))
 
 // 読み込み中・最新話などの知らせ。ツールバーを隠していても見えるよう、ページの上に重ねて出す
 const status = document.body.appendChild(el('div', { id: 'status', role: 'status' }))
@@ -54,6 +62,8 @@ function setStatus(text, action) {
   status.replaceChildren(...(text ? [text] : []))
   if (action) status.append(el('button', { type: 'button', textContent: action.label, onclick: action.run }))
 }
+
+// ---- 話の表示 ----
 
 /** 表示中の話と前後の話（null = ない。なろうの次話は開いてみるまで分からない） */
 let current
@@ -99,15 +109,14 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
     site === 'narou'
       ? { episode, prev: n > 1 ? n - 1 : null, next: n + 1 }
       : { episode, prev: res.headers.get('X-Prev-Episode') || null, next: res.headers.get('X-Next-Episode') || null }
-  prevButton.disabled = !current.prev
 
   const novelTitle = book.metadata.title
   const episodeTitle = book.toc[0]?.label ?? ''
   title.textContent = `${novelTitle}　${episodeTitle}`
   title.title = title.textContent // 長くて省略されたときに、全体を確かめられるように
-  sourceLink.href = site === 'narou' ? `https://ncode.syosetu.com/${novelId}/${episode}/` : `https://kakuyomu.jp/works/${novelId}/episodes/${episode}`
-  sourceLink.title = `${site === 'narou' ? '小説家になろう' : 'カクヨム'}でこの話を開く`
   document.title = `${episodeTitle} - ${novelTitle}`
+  prevButton.disabled = !current.prev
+  sourceLink.href = episodeUrl(site, novelId, episode)
   // リロードしても同じ話が開くようにする
   history.replaceState(null, '', `/read/${site}/${novelId}/${episode}`)
   recordHistory({
@@ -120,6 +129,8 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
   })
   setStatus('')
 }
+
+// ---- 話の移動 ----
 
 /** 次の話。カクヨムで次話なしなら、その後に公開されていないかサーバーに 1 回だけ確認する */
 async function findNext() {
@@ -177,6 +188,8 @@ const start = () =>
     }
   })
 
+// ---- 操作 ----
+
 // ページの中央のクリック・タップで、ツールバーを出し入れする（隠した分だけページが広がる）。
 // 隠したかどうかは覚えておき、次に開いたときも同じにする
 const TOOLBAR_KEY = `${READER_STORAGE_KEY}:toolbar`
@@ -195,7 +208,7 @@ viewer.addEventListener('tap', () => {
   } catch {}
 })
 
-// N で次の話、P で前の話。本文をクリックした後はキーが本文の文書に届くので、そちらでも受ける
+// N で次の話、P で前の話。ページ送りのキーは EpubReader が受ける
 function onKey(e) {
   // 押しっぱなしでは移らない（話を次々に取得して、元サイトに負荷をかけないように）
   if (e.repeat || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
@@ -204,17 +217,13 @@ function onKey(e) {
   else if (key === 'p') turn(false)
 }
 addEventListener('keydown', onKey)
-// nepub は話タイトルを大きな文字にし、上下に 2 文字分ずつ余白を取る。高さの低い画面（横向きのスマートフォンなど）では
-// 余白だけでページが埋まり、1 行に 1 文字しか入らなくなるので、そのときだけ文字と余白を小さくする。
-// EPUB には書き込まず表示のときに足すので、キャッシュ済みの話にも効き、後から変えられる
-const PAGE_STYLE = '@media (max-height: 500px) { h1 { margin-top: 0.5em; margin-bottom: 0.5em; font-size: 1.4em; } }'
 
 viewer.addEventListener('sectionload', (e) => {
   const { doc } = e.detail
+  // 本文をクリックした後はキーが本文の文書に届くので、そちらでも受ける
   doc.defaultView.addEventListener('keydown', onKey)
   doc.head.append(Object.assign(doc.createElement('style'), { textContent: PAGE_STYLE }))
 })
-
 viewer.addEventListener('bookend', () => turn(true))
 viewer.addEventListener('bookstart', () => turn(false))
 viewer.addEventListener('relocate', () => {
@@ -225,4 +234,5 @@ viewer.addEventListener('relocate', () => {
   savePosition(site, novelId, current.episode, viewer.location)
 })
 viewer.addEventListener('error', (e) => setStatus(`ページを表示できませんでした: ${e.detail.error}`))
+
 start()

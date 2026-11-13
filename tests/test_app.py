@@ -58,7 +58,7 @@ class PagesTest(AppTestCase):
 
     def test_reader_preloads_its_modules(self):
         body = self.client.get("/read/narou/n1234ab/1").get_data(as_text=True)
-        for module in ["reader.js", "history.js", "epub-viewer/index.js", "epub-viewer/viewer.js", "epub-viewer/zip.js"]:
+        for module in ["reader.js", "history.js", "sites.js", "epub-viewer/index.js", "epub-viewer/viewer.js", "epub-viewer/zip.js"]:
             self.assertIn(f'<link rel="modulepreload" href="/static/{module}">', body)
         # 知らせたものは、どれも実際にある
         for href in re.findall(r'rel="modulepreload" href="([^"]+)"', body):

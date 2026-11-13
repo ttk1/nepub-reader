@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>nepub-reader</title>
+    {#- モジュールの先読みは、読み込みを待たせるもの（theme.js）より前に書く。後ろに書くと、その分だけ始まるのが遅れる #}
+    {%- for module in modules %}
+    <link rel="modulepreload" href="/static/{{ module }}">
+    {%- endfor %}
     <link rel="icon" href="/static/favicon.svg">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="stylesheet" href="/static/reader.css">
     <script src="/static/theme.js"></script>
-    {%- for module in modules %}
-    <link rel="modulepreload" href="/static/{{ module }}">
-    {%- endfor %}
     <script type="module" src="/static/reader.js"></script>
 </head>
 <body>

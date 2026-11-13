@@ -1,5 +1,6 @@
 // トップページ。読書履歴の一覧・削除・エクスポート・インポート。
 import { getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory } from './history.js'
+import { novelUrl, siteName } from './sites.js'
 
 const list = document.getElementById('history-list')
 const message = document.getElementById('history-message')
@@ -40,14 +41,13 @@ const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.l
 
 function historyItem(item) {
   const site = item.site || 'narou'
-  const siteName = site === 'kakuyomu' ? 'カクヨム' : '小説家になろう'
-  const id = encodeURIComponent(item.novel_id)
+  const openInSite = `${siteName(site)}で作品ページを開く`
   // カクヨムの last_episode はエピソード ID なので話数は出せない
   const meta = [site === 'narou' && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
 
   const link = el(
     'a',
-    { className: 'history-link', href: `/read/${site}/${id}/${encodeURIComponent(item.last_episode)}` },
+    { className: 'history-link', href: `/read/${site}/${encodeURIComponent(item.novel_id)}/${encodeURIComponent(item.last_episode)}` },
     el(
       'span',
       { className: 'history-text' },
@@ -64,11 +64,11 @@ function historyItem(item) {
   // 元サイトの作品トップページへの外部リンク
   const external = el('a', {
     className: 'history-external',
-    href: site === 'kakuyomu' ? `https://kakuyomu.jp/works/${id}` : `https://ncode.syosetu.com/${id}/`,
+    href: novelUrl(site, item.novel_id),
     target: '_blank',
     rel: 'noopener noreferrer',
-    title: `${siteName}で作品ページを開く`,
-    ariaLabel: `${siteName}で作品ページを開く`,
+    title: openInSite,
+    ariaLabel: openInSite,
     innerHTML: EXTERNAL_ICON,
   })
   const deleteButton = el('button', {
