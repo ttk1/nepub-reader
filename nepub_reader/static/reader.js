@@ -26,8 +26,9 @@ const el = (tag, props, ...children) => {
 }
 
 // EpubReader の既定の文字サイズ（45px）は、離れて読む大きな画面向け。スマートフォンでは 1 ページに
-// 数文字しか入らないので、狭い画面では初期値を小さくする（利用者が変えた後は、その値が使われる）
-const settings = matchMedia('(max-width: 600px)').matches ? { fontSize: 24 } : {}
+// 数文字しか入らないので、狭い画面では初期値を小さくする（利用者が変えた後は、その値が使われる）。
+// 横向きのスマートフォンは幅が広いので、高さでも見る
+const settings = matchMedia('(max-width: 600px), (max-height: 600px)').matches ? { fontSize: 24 } : {}
 
 const reader = new EpubReader(document.getElementById('reader'), { storage: settingsStorage, storageKey: READER_STORAGE_KEY, settings })
 const { toolbar, viewer } = reader
@@ -192,7 +193,16 @@ function onKey(e) {
   else if (key === 'p') turn(false)
 }
 addEventListener('keydown', onKey)
-viewer.addEventListener('sectionload', (e) => e.detail.doc.defaultView.addEventListener('keydown', onKey))
+// nepub は話タイトルを大きな文字にし、上下に 2 文字分ずつ余白を取る。高さの低い画面（横向きのスマートフォンなど）では
+// 余白だけでページが埋まり、1 行に 1 文字しか入らなくなるので、そのときだけ文字と余白を小さくする。
+// EPUB には書き込まず表示のときに足すので、キャッシュ済みの話にも効き、後から変えられる
+const PAGE_STYLE = '@media (max-height: 500px) { h1 { margin-top: 0.5em; margin-bottom: 0.5em; font-size: 1.4em; } }'
+
+viewer.addEventListener('sectionload', (e) => {
+  const { doc } = e.detail
+  doc.defaultView.addEventListener('keydown', onKey)
+  doc.head.append(Object.assign(doc.createElement('style'), { textContent: PAGE_STYLE }))
+})
 
 viewer.addEventListener('bookend', () => turn(true))
 viewer.addEventListener('bookstart', () => turn(false))
