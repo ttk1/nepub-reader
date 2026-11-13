@@ -86,7 +86,10 @@ async function fetchEpub(episode) {
 async function show(episode, location = savedPosition(site, novelId, episode)) {
   setStatus('読み込み中…')
   const res = await fetchEpub(episode)
-  const book = await reader.open(await res.blob(), { location: location ?? START })
+  // EpubReader のエラーは英語なので、何が起きたかを前に付ける
+  const book = await reader.open(await res.blob(), { location: location ?? START }).catch((e) => {
+    throw new Error(`話を表示できませんでした（${e.message}）`)
+  })
 
   const n = Number(episode)
   current =

@@ -5,6 +5,7 @@ import { DEFAULT_OPTIONS } from './options.js';
 import { firstText, pageOf, paginate, prepare, scrolledPage, scrollToPage } from './reflow.js';
 /** A frame, or its slot, that fills the room it is given. */
 const FILL = 'width:100%;height:100%';
+const BLOCKED = 'The page could not be loaded into its frame: the Content-Security-Policy of the host page has to allow frames of blob: URLs';
 /** The pagination of a fixed-layout page: it is a page as it is. */
 const ONE_PAGE = { writingMode: '', vertical: false, pageSize: 0, pages: 1 };
 /**
@@ -228,7 +229,7 @@ export class EpubViewer extends EventTarget {
         iframe.style.cssText = `display:block;border:0;${frame}`;
     }
     #loadFrame(iframe, url) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             let [loaded, left] = [false, false];
             const leave = () => {
                 if (left)
@@ -240,14 +241,22 @@ export class EpubViewer extends EventTarget {
                 this.dispatchEvent(new CustomEvent('error', { detail: { error: new Error('The book tried to leave its page') } }));
             };
             iframe.addEventListener('load', async () => {
-                const doc = iframe.contentDocument;
+                let doc = null;
+                try {
+                    doc = iframe.contentDocument;
+                }
+                catch { } // WebKit throws for a page that is not ours to read: the same as null
                 if (loaded) {
                     // A frame is loaded once. If it loads again, the book has taken it to another page by a
                     // way that is not known (the known ones are closed in book.ts and input.ts): that page is not shown.
                     if (doc?.URL !== 'about:blank')
                         leave();
                 }
-                else if (doc && doc.URL !== 'about:blank') {
+                else if (!doc) {
+                    // An error page of the browser in the place of the document: see #blocked.
+                    reject(new Error(BLOCKED));
+                }
+                else if (doc.URL !== 'about:blank') {
                     loaded = true;
                     // Also when that page does not finish loading (and so does not fire "load"): the document
                     // of the book is left as soon as the other one comes. (Not when the frame is taken out of the
@@ -259,6 +268,24 @@ export class EpubViewer extends EventTarget {
             });
             iframe.src = url;
         });
+    }
+    /**
+     * Rejects when the Content-Security-Policy of the host page stops a frame of the book, until
+     * `stop` is called. Such a frame never loads, and the wait for it would not end: the site could
+     * not tell its user. What the browsers do differs. All three tell the host document of a frame
+     * stopped by frame-src (only the scheme of its URL, so not of which frame: any that is being
+     * waited for is taken to be meant), and Firefox does nothing else. Chromium also loads a page
+     * that cannot be read; so does WebKit for frame-ancestors, which it applies to the frames of the
+     * book too, without telling the host (see #loadFrame).
+     */
+    #blocked() {
+        const host = this.#container.ownerDocument;
+        let onViolation;
+        const promise = new Promise((_, reject) => {
+            onViolation = (e) => e.effectiveDirective === 'frame-src' && e.blockedURI.startsWith('blob') && reject(new Error(BLOCKED));
+        });
+        host.addEventListener('securitypolicyviolation', onViolation);
+        return { promise, stop: () => host.removeEventListener('securitypolicyviolation', onViolation) };
     }
     /** The area of the page(s), without the empty sides. */
     #pagesRect() {
@@ -323,7 +350,14 @@ export class EpubViewer extends EventTarget {
                 // when ready: the screen does not go blank in between (in manga, at every page turn).
                 const frames = urls.map(() => this.#createFrame());
                 // Frames taken out of the page by destroy() never load: the wait ends with it.
-                const docs = await Promise.race([Promise.all(frames.map((frame, i) => this.#loadFrame(frame, urls[i]))), this.#destroyed]);
+                const blocked = this.#blocked();
+                const docs = await Promise.race([Promise.all(frames.map((frame, i) => this.#loadFrame(frame, urls[i]))), this.#destroyed, blocked.promise])
+                    .catch((error) => {
+                    for (const frame of frames)
+                        frame.parentElement.remove(); // not left behind, out of sight: the page before stays
+                    throw error;
+                })
+                    .finally(blocked.stop);
                 const superseded = this.#committed !== navigation; // by a newer navigation, or by destroy()
                 for (const frame of superseded ? frames : this.#frames)
                     frame.parentElement.remove();

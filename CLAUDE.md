@@ -66,7 +66,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ## 同梱の epub-viewer
 
-- 取り込み元: https://github.com/ttk1/epub-viewer の `v2.0.0`（コミット `6d15332`。リリース前の確認として取り込んだもので、公開時にタグが別のコミットに付いたら、そのコミットで取り込み直してここを更新する）。npm には公開されていないので、ビルド成果物を同梱している。
+- 取り込み元: https://github.com/ttk1/epub-viewer の `v2.0.0`（コミット `0dd5780`。リリース前の確認として取り込んだもので、公開時にタグが別のコミットに付いたら、そのコミットで取り込み直してここを更新する）。npm には公開されていないので、ビルド成果物を同梱している。
 - 更新手順: epub-viewer でタグをチェックアウトし、`docker compose run --rm node sh -c "npm ci && npm run build"` → `dist/src/` の中身と `LICENSE` を `nepub_reader/static/epub-viewer/` に上書きコピー（消えたファイルは削除）→ 上の取り込み元のタグ・コミットを更新 → 動作確認。
 - API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・スワイプ・ホイール、リモコンのチャタリング対策）と表示設定（テーマ・フォント・行間・表示幅など）は epub-viewer 側の機能なので、こちらで作り直さない。
 - `reader.js` が使うのは公開 API だけ（`reader.toolbar` と、作品名・話タイトルの表示に使う `.title` 要素も公開 API）。ツールバーのそれ以外の中身には頼らない。
