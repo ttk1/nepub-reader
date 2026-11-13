@@ -77,7 +77,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 - **話の移動**: リーダー画面はページを遷移せずに次/前の話を読み込み、URL は `history.replaceState` で書き換える（リロードで同じ話が開く）。`bookend` / `bookstart` はキーを押すたびに発生するので、読み込み中は `loading` で無視する。
 - **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は自動では再確認しない（キーを押すたびに元サイトへアクセスしないように）。知らせの「再確認」ボタンを押したときだけ確かめ直す。
-- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
+- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。履歴は読むたびに検証し、使えない項目を除く（`getHistory` → `sanitizeHistoryItem`。壊れた項目が 1 つあるだけで、一覧や記録が止まらないように）。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
 - **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
 - **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
 - **epub-viewer の不具合は epub-viewer で直す**: 同梱の epub-viewer の不具合を見つけたら、こちらに回避策を入れずに、再現条件と原因をまとめて報告する（ユーザーの方針）。
@@ -111,5 +111,6 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - 画面の大きさは、Playwright の `devices`（`iPhone 15`、`iPhone 15 landscape`、`Pixel 7`、`iPad (gen 7)` など）とテレビ相当（1920×1080）でも確かめる。横向きのスマートフォンは幅が 600px を超えるので、幅だけで判定している処理が漏れやすい。
 - 挿絵のある話は、元サイトにアクセスせずに確かめられる: コンテナの中で `episodes._write_episode_epub` に、`images`（PNG のバイト列を持つ）と `<img src="../image/<名前>"/>` の段落を持つ偽のパーサーを渡して EPUB を作り、キャッシュに置いて開く。
 - WebKit は、`try` で捕まえたフレームへのアクセス違反（`Blocked a frame at ...`）もコンソールにエラーとして記録する。`pageerror` に出ても、捕まえ損ねた例外とは限らない（スタックで場所を確かめる）。
+- 壊れた保存データ（`nepub_reading_history` に `null` や型の違う値、`nepub-reader:settings` に壊れた JSON）と、localStorage が使えない環境（`addInitScript` で `localStorage` の取得を例外にする）でも、トップページとリーダーが動くか確かめる。
 - 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、履歴が 50 件で長いタイトルのとき。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。

@@ -73,6 +73,22 @@ test('壊れた履歴や読書位置は使わない', async () => {
   assert.equal(savedPosition('narou', 'n1', '1'), undefined)
 })
 
+test('保存された履歴に壊れた項目があっても、使える項目は読める', async () => {
+  const { getHistory, recordHistory } = await loadHistory()
+  const good = entry({ novel_id: 'n2', last_episode: 7, last_accessed: '2026-01-01T00:00:00.000Z' })
+  localStorage.setItem(
+    HISTORY_KEY,
+    JSON.stringify([null, 'x', { novel_id: 'n1' }, { novel_id: 'n3', last_episode: { a: 1 } }, { novel_id: 'n4', novel_title: 5, episode_title: {}, last_episode: 2, last_accessed: 9 }, good]),
+  )
+  assert.deepEqual(getHistory().map((item) => [item.novel_id, item.novel_title, item.episode_title, item.last_accessed]), [
+    ['n4', 'n4', '', ''],
+    ['n2', '作品', '話', '2026-01-01T00:00:00.000Z'],
+  ])
+  // 記録もできる（壊れた項目は、このときに取り除かれる）
+  recordHistory(entry({ novel_id: 'n5' }))
+  assert.deepEqual(stored().map((item) => item.novel_id), ['n5', 'n4', 'n2'])
+})
+
 test('site のない古い履歴は、なろうとして扱う', async () => {
   const { novelKey, savedPosition } = await loadHistory()
   const old = { novel_id: 'n1', last_episode: 2, position: { index: 0, progress: 0.2 } }
@@ -139,5 +155,5 @@ test('インポートする履歴は、既知の項目だけを残す', async ()
     last_accessed: '',
     position: undefined,
   })
-  for (const junk of [null, 'x', 1, {}, { novel_id: 'n1' }, { last_episode: 1 }]) assert.equal(sanitizeHistoryItem(junk), null)
+  for (const junk of [null, 'x', 1, {}, { novel_id: 'n1' }, { last_episode: 1 }, { novel_id: 'n1', last_episode: {} }]) assert.equal(sanitizeHistoryItem(junk), null)
 })

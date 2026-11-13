@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import threading
 import unittest
 import urllib.error
 import zipfile
@@ -171,6 +172,17 @@ class GetEpubTest(CacheTestCase):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
         episodes.get_epub("narou", "n1234ab", "12")
         episodes.get_epub("narou", "n1234ab", "12")
+        self.assertEqual(len(self.fetched), 1)
+
+    def test_simultaneous_requests_fetch_the_episode_once(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        results = []
+        threads = [threading.Thread(target=lambda: results.append(episodes.get_epub("narou", "n1234ab", "12"))) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(len(results), 8)
         self.assertEqual(len(self.fetched), 1)
 
     def test_kakuyomu(self):

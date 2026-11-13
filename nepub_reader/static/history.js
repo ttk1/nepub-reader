@@ -12,10 +12,11 @@ export const novelKey = (item) => `${item.site || 'narou'}:${item.novel_id}`
 /** 読書位置（EpubViewer の location）として使える値か。保存されたものやインポートしたものを確かめる */
 export const isPosition = (value) => Number.isFinite(value?.index) && Number.isFinite(value?.progress)
 
+/** 保存されている履歴。使えない項目は除く（壊れた項目が 1 つあるだけで、一覧や記録が止まらないように） */
 export function getHistory() {
   try {
     const history = JSON.parse(localStorage.getItem(HISTORY_KEY))
-    return Array.isArray(history) ? history : []
+    return Array.isArray(history) ? history.map(sanitizeHistoryItem).filter(Boolean) : []
   } catch {
     return []
   }
@@ -48,9 +49,10 @@ export function savePosition(site, novelId, episode, position) {
   saveHistory(history)
 }
 
-/** インポートした履歴の 1 件を検証し、既知の項目だけを残す（使えないものは null） */
+/** 履歴の 1 件（保存されていたもの、インポートしたもの）を検証し、既知の項目だけを残す（使えないものは null） */
 export function sanitizeHistoryItem(item) {
-  if (!item || typeof item !== 'object' || !item.novel_id || item.last_episode == null) return null
+  if (!item || typeof item !== 'object' || !item.novel_id) return null
+  if (typeof item.last_episode !== 'string' && typeof item.last_episode !== 'number') return null
   const text = (value, fallback) => (typeof value === 'string' ? value : fallback)
   return {
     site: item.site === 'kakuyomu' ? 'kakuyomu' : 'narou',
