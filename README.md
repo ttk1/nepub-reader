@@ -52,6 +52,8 @@ docker run -p 127.0.0.1:5000:5000 -v nepub-cache:/app/epub-cache nepub-reader
 
 トップページのフォームに小説家になろうまたはカクヨムの URL を入力して「読む」ボタンを押します（先頭の `https://` は省けます）。
 
+読んだことのある作品は、トップページの「続きを読む」と読書履歴から、読んでいた位置で開けます（パソコンでは、トップページを開いてすぐ Enter を押すと、直前に読んでいた作品の続きが開きます）。
+
 - **小説家になろう**
   - 話の URL（`https://ncode.syosetu.com/nXXXXXX/1/`）→ その話から開始
   - 作品ページの URL（`https://ncode.syosetu.com/nXXXXXX/`）→ 1 話から開始

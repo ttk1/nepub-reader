@@ -163,7 +163,11 @@ const SEARCH_FROM = 8
 
 function renderHistory() {
   const history = getHistory()
+  // カードは作り直すので、フォーカスがその中にあったら、作り直した後のカードへ戻す
+  // （「戻る」で戻ってきたときや、カードの作品を削除したときに、フォーカスがなくならないように）
+  const focusedResume = resume.contains(document.activeElement)
   renderResume(history[0])
+  if (focusedResume) resume.querySelector('a')?.focus()
   searchInput.hidden = history.length <= SEARCH_FROM
   if (searchInput.hidden) searchInput.value = ''
   const query = searchInput.value.trim()
@@ -254,8 +258,6 @@ moreButton.addEventListener('click', () => {
 const form = document.getElementById('url-form')
 /** @type {HTMLButtonElement} */
 const submitButton = form.querySelector('button[type="submit"]')
-// すぐ URL を貼れるよう入力欄にフォーカスする。タッチ操作の端末では、開くたびにキーボードが出てしまうのでしない
-if (matchMedia('(hover: hover) and (pointer: fine)').matches) document.getElementById('url-input').focus()
 // URL を送信したら、画面が変わるまでボタンを押せなくする（二重に送信しないように）
 form.addEventListener('submit', () => {
   submitButton.disabled = true
@@ -265,6 +267,13 @@ form.addEventListener('submit', () => {
 // ---- 表示 ----
 
 renderHistory()
+// 開いてすぐ Enter で続きを読めるよう、「続きを読む」にフォーカスする。履歴がないときと、入力した URL にエラーが
+// 出ているときは、すぐ URL を貼れる（直せる）よう入力欄にする。
+// タッチ操作の端末では、入力欄にフォーカスすると開くたびにキーボードが出てしまうので、どちらもしない
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  const resumeLink = document.querySelector('.form-error') ? null : resume.querySelector('a')
+  ;(resumeLink ?? document.getElementById('url-input')).focus()
+}
 // 初めて使うとき（履歴がないとき）は、操作方法を開いておく
 if (getHistory().length === 0) /** @type {HTMLDetailsElement} */ (document.getElementById('help')).open = true
 addEventListener('pageshow', (e) => {

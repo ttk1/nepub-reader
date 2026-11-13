@@ -54,6 +54,8 @@ const episodeButton = (word, key, forward) =>
   el('button', { type: 'button', title: `${word}の話（${key} キー）`, onclick: () => turn(forward) }, word, el('span', { className: 'wide', textContent: 'の' }), '話')
 const prevButton = episodeButton('前', 'P', false)
 const nextButton = episodeButton('次', 'N', true)
+// 話を開くまでは、移る先が分からないので押せなくしておく（開けなかったときも、そのまま）
+prevButton.disabled = nextButton.disabled = true
 toolbar.prepend(el('a', { href: '/', textContent: 'トップ' }), prevButton, nextButton)
 // 読んでいる話の、元サイトのページへのリンク（感想を書く、ブックマークする、など）。狭い画面では出さない（reader.css）
 const sourceLink = toolbar.appendChild(el('a', { className: 'source', textContent: '元ページ', target: '_blank', rel: 'noopener noreferrer', title: `${siteName(site)}でこの話を開く` }))
@@ -125,6 +127,8 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
   title.title = title.textContent // 長くて省略されたときに、全体を確かめられるように
   document.title = [episodeTitle, novelTitle].filter(Boolean).join(' - ')
   prevButton.disabled = !current.prev
+  // 次の話は、ないと分かっていても押せるままにする（最新話だと知らせ、再確認のボタンを出すため）
+  nextButton.disabled = false
   sourceLink.href = current.short ? novelUrl(site, novelId) : episodeUrl(site, novelId, episode)
   // リロードしても同じ話が開くようにする
   history.replaceState(null, '', `/read/${site}/${novelId}/${episode}`)
