@@ -115,5 +115,6 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - 挿絵のある話は、元サイトにアクセスせずに確かめられる: コンテナの中で `episodes._write_episode_epub` に、`images`（PNG のバイト列を持つ）と `<img src="../image/<名前>"/>` の段落を持つ偽のパーサーを渡して EPUB を作り、キャッシュに置いて開く。
 - WebKit は、`try` で捕まえたフレームへのアクセス違反（`Blocked a frame at ...`）もコンソールにエラーとして記録する。`pageerror` に出ても、捕まえ損ねた例外とは限らない（スタックで場所を確かめる）。
 - 壊れた保存データ（`nepub_reading_history` に `null` や型の違う値、`nepub-reader:settings` に壊れた JSON）と、localStorage が使えない環境（`addInitScript` で `localStorage` の取得を例外にする）でも、トップページとリーダーが動くか確かめる。
+- 配色を変えたら、文字のコントラストを 3 つのテーマで計算して確かめる（`getComputedStyle` の色と `opacity` を、親までさかのぼって背景に重ねてから比べる）。文字は 4.5:1 以上、アイコンは 3:1 以上。`opacity` で薄くすると、色の指定だけ見ていても気付かない。
 - 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、履歴が 50 件で長いタイトルのとき。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。

@@ -146,7 +146,8 @@ body {
     color: var(--text-color);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-#url-input::placeholder { color: var(--text-secondary); opacity: 0.7; }
+/* 入力した文字（--text-color）より薄い色。読める濃さは保つ（背景に対して 4.5:1 以上） */
+#url-input::placeholder { color: var(--text-secondary); opacity: 1; }
 #url-input:focus {
     outline: none;
     border-color: var(--accent);
@@ -214,7 +215,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
 .history-action.danger {
     color: var(--danger-color);
     border-color: var(--danger-color);
-    opacity: 0.75;
+    /* 目立たせすぎないために薄くはしない（小さな文字なので、読めるコントラストを保つ） */
     margin-left: 12px;
 }
 /* スマホ幅でも 3 つのボタンが 1 行に収まるようにする */
@@ -321,7 +322,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
     color: var(--text-secondary);
     padding: 6px 8px;
     border-radius: 6px;
-    opacity: 0.7;
+    opacity: 0.9; /* 控えめに見せるが、アイコンとして見分けられる濃さ（3:1 以上）は保つ */
     flex-shrink: 0;
     transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
@@ -340,7 +341,7 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    opacity: 0.7;
+    opacity: 0.9;
     flex-shrink: 0;
     transition: background 0.15s ease, opacity 0.15s ease;
     /* 隣の外部リンクと押し間違えないよう、仕切り線を挟んで距離を取る */
