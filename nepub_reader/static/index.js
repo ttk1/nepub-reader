@@ -48,6 +48,8 @@ const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.l
 function historyItem(item) {
   const site = item.site || 'narou'
   const openInSite = `${siteName(site)}で作品ページを開く`
+  // 読み上げでは、どの作品のボタンかが分かるように作品名を含める（見た目のツールチップは短いまま）
+  const named = (label) => `「${displayTitle(item)}」: ${label}`
   // カクヨムの last_episode はエピソード ID なので話数は出せない。話タイトルのない履歴（なろうの短編）にも出さない
   const meta = [site === 'narou' && item.episode_title && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
 
@@ -74,7 +76,7 @@ function historyItem(item) {
     target: '_blank',
     rel: 'noopener noreferrer',
     title: openInSite,
-    ariaLabel: openInSite,
+    ariaLabel: named(openInSite),
     innerHTML: EXTERNAL_ICON,
   })
   const deleteButton = el('button', {
@@ -82,7 +84,7 @@ function historyItem(item) {
     className: 'history-delete',
     textContent: '✕',
     title: 'この履歴を削除',
-    ariaLabel: 'この履歴を削除',
+    ariaLabel: named('履歴を削除'),
     onclick: () => deleteHistoryItem(item),
   })
   return el('li', { className: 'history-item' }, link, external, deleteButton)
