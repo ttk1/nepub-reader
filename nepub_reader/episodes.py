@@ -212,8 +212,10 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
             page = _get_page(_episode_url(site, novel_id, episode))
             parser = _parse_episode(site, page)
         except urllib.error.HTTPError as e:
+            if not (site == "narou" and episode == "1" and e.code == 404):
+                raise
             # なろうの短編は話のページがなく、作品ページに本文がある。1 話として扱う
-            short_story = _fetch_narou_short_story(novel_id) if site == "narou" and episode == "1" and e.code == 404 else None
+            short_story = _fetch_narou_short_story(novel_id)
             if not short_story:
                 raise
             page, parser = short_story

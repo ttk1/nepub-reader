@@ -2,7 +2,7 @@
 // トップページ（index.js）とリーダー（reader.js）で共有する。
 
 const HISTORY_KEY = 'nepub_reading_history'
-const MAX_HISTORY = 50
+export const MAX_HISTORY = 50
 /** EpubReader の storageKey。表示設定が `<これ>:settings` に保存される（theme.js も読む） */
 export const READER_STORAGE_KEY = 'nepub-reader'
 

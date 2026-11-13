@@ -1,5 +1,5 @@
 // トップページ。読書履歴の一覧・削除・エクスポート・インポート。
-import { getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory } from './history.js'
+import { MAX_HISTORY, getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory } from './history.js'
 import { novelUrl, siteName } from './sites.js'
 
 const list = document.getElementById('history-list')
@@ -137,10 +137,9 @@ async function importHistory(file) {
     return
   }
   const merged = mergeHistory(getHistory(), items)
-  updateHistory(merged, `${items.length} 件の履歴を取り込みました`)
-  // 履歴に残せる数には上限がある。あふれた分があれば伝える
-  const kept = getHistory().length
-  if (kept < merged.length) notify(`${items.length} 件の履歴を取り込みました（新しい順に ${kept} 件を残しています）`)
+  // 履歴に残せる数には上限がある。あふれる分があれば伝える
+  const overflow = merged.length > MAX_HISTORY ? `（新しい順に ${MAX_HISTORY} 件を残しています）` : ''
+  updateHistory(merged, `${items.length} 件の履歴を取り込みました${overflow}`)
 }
 
 exportButton.addEventListener('click', exportHistory)
@@ -153,23 +152,27 @@ clearButton.addEventListener('click', () => {
   if (confirm('読書履歴をすべて削除しますか？')) updateHistory([], '読書履歴をすべて削除しました')
 })
 
-// URL を送信したら、画面が変わるまでボタンを押せなくする（二重に送信しないように）
+// ---- URL の入力 ----
+
 const form = document.getElementById('url-form')
+const submitButton = form.querySelector('button[type="submit"]')
 // すぐ URL を貼れるよう入力欄にフォーカスする。タッチ操作の端末では、開くたびにキーボードが出てしまうのでしない
 if (matchMedia('(hover: hover) and (pointer: fine)').matches) document.getElementById('url-input').focus()
-const submitButton = form.querySelector('button[type="submit"]')
+// URL を送信したら、画面が変わるまでボタンを押せなくする（二重に送信しないように）
 form.addEventListener('submit', () => {
   submitButton.disabled = true
   submitButton.textContent = '開いています…'
 })
-// 「戻る」で戻ってきたときは、元に戻す
-addEventListener('pageshow', () => {
-  submitButton.disabled = false
-  submitButton.textContent = '読む'
-})
+
+// ---- 表示 ----
 
 renderHistory()
-// ブラウザの「戻る」でリーダーから戻ったとき（ページが前の表示のまま復元される）と、
+addEventListener('pageshow', (e) => {
+  // 送信した後に「戻る」で戻ってきたときは、ボタンを元に戻す
+  submitButton.disabled = false
+  submitButton.textContent = '読む'
+  // リーダーから「戻る」で戻ったとき（ページが前の表示のまま復元される）は、一覧を新しくする
+  if (e.persisted) renderHistory()
+})
 // ほかのタブで読み進めたときにも、一覧を新しくする
-addEventListener('pageshow', (e) => e.persisted && renderHistory())
 addEventListener('storage', renderHistory)
