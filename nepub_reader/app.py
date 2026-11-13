@@ -79,7 +79,7 @@ def index():
 
 
 @app.errorhandler(404)
-def not_found(error):
+def not_found(_error):
     """存在しない URL。ページとして開かれたときは、トップページにその旨を出す（Flask の既定は英語のページ）"""
     if "text/html" in request.headers.get("Accept", ""):
         return render_template("index.html", error="ページが見つかりません。"), 404

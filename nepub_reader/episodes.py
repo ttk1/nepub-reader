@@ -3,6 +3,7 @@
 話は (site, 作品 ID, 話) で指す。話は、なろうなら話数、カクヨムならエピソード ID。
 """
 
+import contextlib
 import datetime
 import html
 import json
@@ -189,11 +190,10 @@ def _cached(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | No
     # （そのまま返すと、リーダーは何度やり直しても開けない）
     if not zipfile.is_zipfile(path):
         return None
-    try:
-        # 読まれた話の更新時刻を新しくして、_prune_cache で後回しにする
+    # 読まれた話の更新時刻を新しくして、_prune_cache で後回しにする。
+    # 変えられなくても（読み取り専用のキャッシュなど）、あるものは使う
+    with contextlib.suppress(OSError):
         os.utime(path)
-    except OSError:
-        pass  # 読み取り専用のキャッシュなど。あるものは使う
     adjacent = _read_adjacent(site, novel_id, episode)
     if site == "narou":
         return path, adjacent  # 短編のときだけ、前後の話（なし）が保存されている
