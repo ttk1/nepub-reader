@@ -121,20 +121,22 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
 /** 次の話。カクヨムで次話なしなら、その後に公開されていないかサーバーに 1 回だけ確認する */
 async function findNext() {
   if (current.next || site !== 'kakuyomu' || current.rechecked) return current.next
-  const res = await request(`/api/kakuyomu/next-episode/${novelId}/${current.episode}`)
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error)
+  // 確認に失敗しても、自動では繰り返さない（キーを押すたびに元サイトへアクセスしないように）
   current.rechecked = true
+  const res = await request(`/api/kakuyomu/next-episode/${novelId}/${current.episode}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `次の話を確認できませんでした（${res.status}）`)
   return (current.next = data.next_episode_id)
 }
 
-/** 最新話だと知らせる。その後に公開された話を読めるよう、もう一度確かめるボタンを付ける（押したときだけ元サイトに確認する） */
-function showLatest() {
-  setStatus('最新話です', {
+/** 次の話がないと知らせる。その後に公開された話を読めるよう、もう一度確かめるボタンを付ける（押したときだけ元サイトに確認する） */
+function showLatest(text = '最新話です') {
+  setStatus(text, {
     label: '再確認',
     run: () => {
       if (site === 'narou') current.next = Number(current.episode) + 1
       else current.rechecked = false
+      current.nextError = undefined
       turn(true)
     },
   })
@@ -147,12 +149,15 @@ const turn = (forward) =>
     try {
       const episode = forward ? await findNext() : current.prev
       if (episode) await show(episode, forward ? START : END)
-      else if (forward) showLatest()
+      else if (forward) showLatest(current.nextError) // 確認に失敗していたら、最新話とは言わない
       else setStatus('最初の話です')
     } catch (e) {
       if (forward && e.status === 404 && site === 'narou') {
         current.next = null // 最新話
         showLatest()
+      } else if (forward && !current.next) {
+        current.nextError = e.message // 次の話の確認に失敗した。やり直せるようにする
+        showLatest(e.message)
       } else {
         setStatus(e.message)
       }
