@@ -6,6 +6,7 @@ body { margin: 0; overscroll-behavior: none; }
    （theme.js が <html data-theme> を決める。色は epub-viewer の themes と同じ） */
 :root[data-theme="sepia"] body { background: #f4ecd8; }
 :root[data-theme="dark"] body { background: #000000; }
+noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
 /* dvh が使えない古いブラウザ向けに vh を併記する */
 #reader { height: 100vh; height: 100dvh; }
 

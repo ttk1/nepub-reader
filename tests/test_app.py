@@ -52,6 +52,14 @@ class PagesTest(AppTestCase):
         self.assertEqual(res.headers["Referrer-Policy"], "same-origin")
         self.assertEqual(res.headers["X-Robots-Tag"], "noindex, nofollow")
 
+    def test_unknown_page_is_shown_on_index(self):
+        res = self.client.get("/nothing", headers={"Accept": "text/html"})
+        self.assertEqual(res.status_code, 404)
+        self.assertIn("ページが見つかりません", res.get_data(as_text=True))
+        # ページとして開かれたのでなければ（画像やスクリプトの読み込みなど）、短い文だけを返す
+        res = self.client.get("/static/nothing.js", headers={"Accept": "*/*"})
+        self.assertEqual((res.status_code, res.get_data(as_text=True)), (404, "見つかりません"))
+
     def test_reader(self):
         self.assertEqual(self.client.get("/read/narou/n1234ab/1").status_code, 200)
         self.assertEqual(self.client.get("/read/kakuyomu/100/200").status_code, 200)
