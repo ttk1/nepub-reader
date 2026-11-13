@@ -121,6 +121,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 - **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
 - **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
+- **Dockerfile は 2 段**: ビルド用の段で git と uv を使って依存を入れ、実行用の段にはアプリと依存（`/app`）だけをコピーする。実行用のイメージに git と uv は入らない。動かすユーザー（`appuser`）が書き込めるのは `epub-cache/` だけで、アプリのコードは書き換えられない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
 

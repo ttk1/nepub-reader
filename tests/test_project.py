@@ -17,7 +17,9 @@ def read(name: str) -> str:
 class PinnedVersionsTest(unittest.TestCase):
     def test_docker_images_are_pinned_by_digest(self):
         dockerfile = read("Dockerfile")
+        stages = re.findall(r"^FROM \S+ AS (\w+)", dockerfile, re.M)
         images = re.findall(r"^FROM (\S+)", dockerfile, re.M) + re.findall(r"--from=(\S+)", dockerfile)
+        images = sorted({image for image in images if image not in stages})  # 前の段を指す --from=<段の名前> は除く
         self.assertEqual(len(images), 2)  # python と uv
         for image in images:
             self.assertRegex(image, rf"^[\w./-]+:[\w.-]+{DIGEST}$", image)
@@ -51,7 +53,7 @@ class DockerContextTest(unittest.TestCase):
         # .dockerignore は、通すものだけを書く形にしている。Dockerfile が COPY するものが漏れていると、ビルドが失敗する
         allowed = {line[1:].rstrip("/") for line in read(".dockerignore").splitlines() if line.startswith("!")}
         sources = []
-        for line in re.findall(r"^COPY (?!--from)(.+)$", read("Dockerfile"), re.M):
+        for line in re.findall(r"^COPY (?!--from)(.+)$", read("Dockerfile"), re.M):  # 前の段やほかのイメージからのコピーは除く
             sources += [source.rstrip("/") for source in line.split()[:-1]]
         self.assertTrue(sources)
         self.assertEqual(set(sources) - allowed, set())
