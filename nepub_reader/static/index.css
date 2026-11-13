@@ -98,6 +98,14 @@ body {
     font-size: 1.9em;
     letter-spacing: 0.01em;
 }
+/* アイコンと同じ絵。角を丸くして、文字の高さに合わせる */
+.site-header .logo {
+    width: 1.15em;
+    height: 1.15em;
+    margin-right: 0.35em;
+    border-radius: 22%;
+    vertical-align: -0.22em;
+}
 .site-header .tagline {
     margin: 6px 0 0;
     color: var(--text-secondary);
