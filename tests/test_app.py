@@ -1,5 +1,6 @@
 """ルーティングのテスト（話の取得は差し替える）"""
 
+import re
 import tempfile
 import unittest
 import urllib.error
@@ -39,6 +40,16 @@ class PagesTest(AppTestCase):
     def test_reader(self):
         self.assertEqual(self.client.get("/read/narou/n1234ab/1").status_code, 200)
         self.assertEqual(self.client.get("/read/kakuyomu/100/200").status_code, 200)
+
+    def test_reader_preloads_its_modules(self):
+        body = self.client.get("/read/narou/n1234ab/1").get_data(as_text=True)
+        for module in ["reader.js", "history.js", "epub-viewer/index.js", "epub-viewer/viewer.js", "epub-viewer/zip.js"]:
+            self.assertIn(f'<link rel="modulepreload" href="/static/{module}">', body)
+        # 知らせたものは、どれも実際にある
+        for href in re.findall(r'rel="modulepreload" href="([^"]+)"', body):
+            res = self.client.get(href)
+            self.assertEqual(res.status_code, 200, href)
+            res.close()
 
     def test_reader_rejects_invalid_episode(self):
         for path in ["/read/narou/n1234ab/0", "/read/kakuyomu/abc/1", "/read/other/1/1"]:

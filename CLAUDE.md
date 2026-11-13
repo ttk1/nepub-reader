@@ -96,6 +96,7 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - **元サイトへのアクセス**: `episodes.py` のロックで同時に 1 つにし（同じ話の二重取得も防ぐ）、ページの取得は `FETCH_INTERVAL`（1 秒）空ける。リーダーの N / P キーは押しっぱなしでは働かせない。話を次々に飛ばしても、元サイトに負荷をかけないため。作品 ID・話は `is_valid_episode` を通したものだけを、キャッシュのファイル名と元サイトの URL に使う。
 - **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
 - **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
+- **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 500ms になる（約 3 割）。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
 - **トップページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。配色は `index.css` の `:root[data-theme=...]`。

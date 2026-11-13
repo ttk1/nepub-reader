@@ -6,6 +6,9 @@
     <title>nepub-reader</title>
     <link rel="icon" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/reader.css">
+    {%- for module in modules %}
+    <link rel="modulepreload" href="/static/{{ module }}">
+    {%- endfor %}
     <script type="module" src="/static/reader.js"></script>
 </head>
 <body>

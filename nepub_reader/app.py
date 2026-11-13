@@ -3,6 +3,7 @@
 import logging
 import os
 import urllib.error
+from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file
 
@@ -12,6 +13,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 # static/ には画面の JS・CSS と同梱の epub-viewer（static/epub-viewer/）を置く
 app = Flask(__name__)
+
+# リーダー画面が使う JS のモジュール（reader.js と、そこから順に読み込まれるもの）。
+# HTML で先に知らせて、まとめて読み込ませる。知らせないと、モジュールが次のモジュールを呼ぶたびに
+# 通信の往復が増え、通信の遅い環境で最初のページが出るのが遅くなる
+READER_MODULES = [
+    "reader.js",
+    "history.js",
+    *sorted(f"epub-viewer/{path.name}" for path in Path(app.static_folder, "epub-viewer").glob("*.js")),
+]
 
 # epub-viewer は書籍の各ページ・画像・CSS・フォントを blob: URL で表示するので、
 # それらの blob: と（書籍内の）data: を許可する。スクリプトは static/ のファイルだけ
@@ -109,7 +119,7 @@ def read_episode(site: str, novel_id: str, episode: str):
         return redirect(f"/read/{site}/{novel_id.lower()}/{episode}")
     if not episodes.is_valid_episode(site, novel_id, episode):
         return render_template("index.html", error="この URL の話は開けません。作品か話の URL を入力し直してください。"), 404
-    return render_template("reader.html")
+    return render_template("reader.html", modules=READER_MODULES)
 
 
 @app.route("/epub/<site>/<novel_id>/<episode>")
