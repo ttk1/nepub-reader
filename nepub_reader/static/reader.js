@@ -64,10 +64,14 @@ async function whileLoading(task) {
   }
 }
 
-async function fetchEpub(episode) {
-  const res = await fetch(`/epub/${site}/${novelId}/${episode}`).catch(() => {
+/** サーバーへのリクエスト。つながらないときは、利用者に見せられるメッセージのエラーにする */
+const request = (url) =>
+  fetch(url).catch(() => {
     throw new Error('サーバーに接続できませんでした')
   })
+
+async function fetchEpub(episode) {
+  const res = await request(`/epub/${site}/${novelId}/${episode}`)
   if (res.ok) return res
   const message = await res.text()
   // サーバーが用意したメッセージ以外（エラーページの HTML など）は、そのまま出さない
@@ -109,7 +113,7 @@ async function show(episode, location = savedPosition(site, novelId, episode)) {
 /** 次の話。カクヨムで次話なしなら、その後に公開されていないかサーバーに 1 回だけ確認する */
 async function findNext() {
   if (current.next || site !== 'kakuyomu' || current.rechecked) return current.next
-  const res = await fetch(`/api/kakuyomu/next-episode/${novelId}/${current.episode}`)
+  const res = await request(`/api/kakuyomu/next-episode/${novelId}/${current.episode}`)
   const data = await res.json()
   if (!res.ok) throw new Error(data.error)
   current.rechecked = true
