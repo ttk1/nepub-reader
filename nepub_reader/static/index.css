@@ -219,22 +219,21 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
     border-color: var(--accent);
     color: var(--accent);
 }
-/* 全消去は危険操作なので他のボタンと見た目を分け、距離も取る */
+/* 全消去は危険操作なので他のボタンと見た目を分け、距離も取る。
+   小さな文字なので、控えめに見せるために薄くはしない（読めるコントラストを保つ） */
 .history-action.danger {
     color: var(--danger-color);
     border-color: var(--danger-color);
-    /* 目立たせすぎないために薄くはしない（小さな文字なので、読めるコントラストを保つ） */
     margin-left: 12px;
-}
-/* スマホ幅でも 3 つのボタンが 1 行に収まるようにする */
-@media (max-width: 480px) {
-    .history-action { padding: 4px 7px; }
 }
 .history-action.danger:hover {
     background: var(--danger-fill);
     border-color: var(--danger-fill);
     color: var(--danger-fill-fg);
-    opacity: 1;
+}
+/* スマホ幅でも 3 つのボタンが 1 行に収まるようにする */
+@media (max-width: 480px) {
+    .history-action { padding: 4px 7px; }
 }
 /* 取り込みや削除の結果。空のときは場所を取らない */
 .history-message {
