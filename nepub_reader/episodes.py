@@ -6,6 +6,7 @@
 import datetime
 import html
 import json
+import logging
 import os
 import re
 import shutil
@@ -188,12 +189,8 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
         if cached := _cached(site, novel_id, episode):
             return cached
 
-        if site == "narou":
-            parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
-        else:
-            parser = KakuyomuEpisodeParser(convert_tcy=True)
         page = _get_page(_episode_url(site, novel_id, episode))
-        parser.feed(page)
+        parser = _parse_episode(site, page)
         # 本文が取れないとき（ページ構造の変更、削除された作品など）に、壊れた EPUB をキャッシュしない
         if not parser.paragraphs:
             raise ValueError("本文を抽出できませんでした")
@@ -207,6 +204,25 @@ def _fetch(site: str, novel_id: str, episode: str) -> tuple[Path, Adjacent | Non
             _write_adjacent(novel_id, episode, adjacent)
         _prune_cache()
         return path, adjacent
+
+
+def _parse_episode(site: str, page: str) -> NarouEpisodeParser:
+    """話のページを nepub のパーサーに読ませる"""
+    if site == "kakuyomu":
+        parser = KakuyomuEpisodeParser(convert_tcy=True)
+        parser.feed(page)
+        return parser
+    try:
+        # なろうは挿絵も取り込む（パーサーが挿絵を取得する）
+        parser = NarouEpisodeParser(include_images=True, convert_tcy=True)
+        parser.feed(page)
+    except Exception as e:
+        # 挿絵が取れない（削除された、想定しない形式、など）ときは、挿絵なしで読めるようにする。
+        # 話のページは取れているので、ここでのエラーを「話がない」として扱わない
+        logging.warning(f"挿絵を取り込めなかったので、挿絵なしで作ります: {e}")
+        parser = NarouEpisodeParser(include_images=False, convert_tcy=True)
+        parser.feed(page)
+    return parser
 
 
 def _write_episode_epub(

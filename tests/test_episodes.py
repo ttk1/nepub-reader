@@ -168,6 +168,27 @@ class GetEpubTest(CacheTestCase):
         self.assertEqual(read_epub(path, "src/content.opf").count('href="image/0123abcd.png"'), 1)
         self.assertIn('<img alt="挿絵" src="../image/0123abcd.png"/>', read_epub(path, "src/text/3.xhtml"))
 
+    def test_narou_is_readable_when_an_illustration_cannot_be_fetched(self):
+        # 削除された挿絵など。話のページは取れているので、挿絵なしで読めるようにする
+        # （挿絵の 404 を話の 404 として扱うと、リーダーが「最新話です」と誤って知らせる）
+        image_url = "//12345.mitemin.net/userpageimage/viewimagebig/icode/i678901/"
+        self.pages["https://ncode.syosetu.com/n1234ab/4/"] = NAROU_PAGE.replace('<p id="L2">', f'<p id="L3"><img src="{image_url}"></p><p id="L2">')
+        not_found = urllib.error.HTTPError(image_url, 404, "Not Found", None, None)
+        with mock.patch("nepub.parser.narou.get_image", side_effect=not_found), self.assertLogs(level="WARNING"):
+            path, _ = episodes.get_epub("narou", "n1234ab", "4")
+
+        text = read_epub(path, "src/text/4.xhtml")
+        self.assertIn("本文です。", text)
+        self.assertNotIn("<img", text)
+        self.assertEqual(len(self.fetched), 1)  # 話のページは取り直さない
+
+    def test_narou_is_readable_when_an_illustration_is_not_as_expected(self):
+        # nepub のパーサーが想定しない挿絵の URL（例外になる）
+        self.pages["https://ncode.syosetu.com/n1234ab/5/"] = NAROU_PAGE.replace('<p id="L2">', '<p id="L3"><img src="https://example.com/x.png"></p><p id="L2">')
+        with self.assertLogs(level="WARNING"):
+            path, _ = episodes.get_epub("narou", "n1234ab", "5")
+        self.assertIn("本文です。", read_epub(path, "src/text/5.xhtml"))
+
     def test_cached_episode_is_not_fetched_again(self):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
         episodes.get_epub("narou", "n1234ab", "12")
