@@ -1,16 +1,22 @@
-// トップページ。読書履歴の一覧・削除・エクスポート・インポート。
-import { MAX_HISTORY, getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory } from './history.js'
+// トップページ。直前に読んでいた作品（続きを読む）と、読書履歴の一覧・絞り込み・削除・エクスポート・インポート。
+import { MAX_HISTORY, getHistory, mergeHistory, novelKey, sanitizeHistoryItem, saveHistory, searchHistory } from './history.js'
 import { novelUrl, siteName } from './sites.js'
 
+const resume = document.getElementById('resume')
 const list = document.getElementById('history-list')
+const count = document.getElementById('history-count')
+const searchInput = /** @type {HTMLInputElement} */ (document.getElementById('history-search'))
+const moreButton = document.getElementById('history-more')
 const message = document.getElementById('history-message')
 const exportButton = document.getElementById('history-export')
 const clearButton = document.getElementById('history-clear')
 const importButton = document.getElementById('history-import')
 const importInput = /** @type {HTMLInputElement} */ (document.getElementById('history-import-file'))
 
-const EXTERNAL_ICON =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+const icon = (paths) =>
+  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
+const EXTERNAL_ICON = icon('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>')
+const DELETE_ICON = icon('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>')
 
 /** document.createElement の短縮形。props は要素のプロパティ（className, textContent など） */
 const el = (tag, props, ...children) => {
@@ -27,7 +33,7 @@ let messageTimer
 function notify(text, action) {
   clearTimeout(messageTimer)
   message.replaceChildren(...(text ? [text] : []))
-  if (action) message.append(el('button', { type: 'button', className: 'history-action', textContent: action.label, onclick: action.run }))
+  if (action) message.append(el('button', { type: 'button', className: 'quiet', textContent: action.label, onclick: action.run }))
   if (text) messageTimer = setTimeout(() => message.replaceChildren(), MESSAGE_MS)
 }
 
@@ -45,60 +51,130 @@ function formatDate(isoString) {
 // 旧形式の履歴に残っているサイト名は表示時に取る
 const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.last_episode}話`).replace(/ - カクヨム$/, '')
 
-function historyItem(item) {
-  const site = item.site || 'narou'
-  const openInSite = `${siteName(site)}で作品ページを開く`
+/** 履歴の話を開くリーダー画面 */
+const readUrl = (item) => `/read/${item.site}/${encodeURIComponent(item.novel_id)}/${encodeURIComponent(item.last_episode)}`
+
+// カクヨムの last_episode はエピソード ID なので話数は出せない。話タイトルのない履歴（なろうの短編）にも出さない
+const episodeNumber = (item) => (item.site === 'narou' && item.episode_title ? `第${item.last_episode}話` : '')
+
+/** その話をどこまで読んだか（%）。読書位置のない履歴では null */
+const readPercent = (item) => (item.position ? Math.round(Math.min(1, Math.max(0, item.position.progress)) * 100) : null)
+
+/** どこまで読んだかを示す線 */
+function progressBar(percent) {
+  const fill = el('span')
+  fill.style.width = `${percent}%`
+  return el('span', { className: 'progress', title: `この話の ${percent}% まで読みました` }, fill)
+}
+
+/** 元サイトの作品ページへのリンクと、履歴から削除するボタン */
+function itemActions(item) {
+  const openInSite = `${siteName(item.site)}で作品ページを開く`
   // 読み上げでは、どの作品のボタンかが分かるように作品名を含める（見た目のツールチップは短いまま）
   const named = (label) => `「${displayTitle(item)}」: ${label}`
-  // カクヨムの last_episode はエピソード ID なので話数は出せない。話タイトルのない履歴（なろうの短編）にも出さない
-  const meta = [site === 'narou' && item.episode_title && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
+  return el(
+    'span',
+    { className: 'item-actions' },
+    el('a', {
+      className: 'item-action',
+      href: novelUrl(item.site, item.novel_id),
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: openInSite,
+      ariaLabel: named(openInSite),
+      innerHTML: EXTERNAL_ICON,
+    }),
+    el('button', {
+      type: 'button',
+      className: 'item-action danger',
+      title: 'この履歴を削除',
+      ariaLabel: named('履歴を削除'),
+      innerHTML: DELETE_ICON,
+      onclick: () => deleteHistoryItem(item),
+    }),
+  )
+}
 
+/** 直前に読んでいた作品を、続きを読むためのカードにする（履歴がなければ出さない） */
+function renderResume(item) {
+  resume.hidden = !item
+  if (!item) return resume.replaceChildren()
+  const title = displayTitle(item)
+  const percent = readPercent(item)
+  // 表紙の代わりの、作品名を縦書きにした札。作品名は隣にも出すので、読み上げない
+  const cover = el('span', { className: 'cover', ariaHidden: 'true' }, el('span', { className: 'cover-title', textContent: title }))
+  // 作品名の長さに合わせて、札の文字の大きさを変える
+  cover.dataset.length = title.length <= 10 ? 'short' : title.length > 40 ? 'long' : 'medium'
+  resume.replaceChildren(
+    el(
+      'a',
+      { className: 'resume-link', href: readUrl(item) },
+      cover,
+      el(
+        'span',
+        { className: 'resume-text' },
+        el('h2', { className: 'section-heading', id: 'resume-heading', textContent: '続きを読む' }),
+        el('span', { className: 'resume-title', textContent: title }),
+        ...(item.episode_title ? [el('span', { className: 'resume-episode', textContent: item.episode_title })] : []),
+        el('span', { className: 'resume-meta', textContent: [siteName(item.site), episodeNumber(item), formatDate(item.last_accessed)].filter(Boolean).join('・') }),
+        el(
+          'span',
+          { className: 'resume-foot' },
+          el('span', { className: 'resume-go', textContent: '読む' }),
+          ...(percent === null ? [] : [el('span', { className: 'resume-progress' }, progressBar(percent), `${percent}%`)]),
+        ),
+      ),
+    ),
+    itemActions(item),
+  )
+}
+
+function historyItem(item) {
+  const percent = readPercent(item)
   const link = el(
     'a',
-    { className: 'history-link', href: `/read/${site}/${encodeURIComponent(item.novel_id)}/${encodeURIComponent(item.last_episode)}` },
+    { className: 'history-link', href: readUrl(item) },
     el(
       'span',
       { className: 'history-text' },
       el('span', { className: 'history-title', textContent: displayTitle(item) }),
-      ...(item.episode_title ? [el('span', { className: 'history-episode', textContent: item.episode_title })] : []),
+      el(
+        'span',
+        { className: 'history-episode' },
+        el('span', { className: 'history-site', textContent: item.site === 'kakuyomu' ? 'カクヨム' : 'なろう' }),
+        [episodeNumber(item), item.episode_title].filter(Boolean).join('　'),
+      ),
     ),
-    el(
-      'span',
-      { className: 'history-meta' },
-      el('span', { textContent: meta }),
-      el('span', { className: `badge badge-${site}`, textContent: site === 'kakuyomu' ? 'カクヨム' : 'なろう' }),
-    ),
+    el('span', { className: 'history-meta' }, el('span', { textContent: formatDate(item.last_accessed) }), ...(percent === null ? [] : [progressBar(percent)])),
   )
-  // 元サイトの作品トップページへの外部リンク
-  const external = el('a', {
-    className: 'history-external',
-    href: novelUrl(site, item.novel_id),
-    target: '_blank',
-    rel: 'noopener noreferrer',
-    title: openInSite,
-    ariaLabel: named(openInSite),
-    innerHTML: EXTERNAL_ICON,
-  })
-  const deleteButton = el('button', {
-    type: 'button',
-    className: 'history-delete',
-    textContent: '✕',
-    title: 'この履歴を削除',
-    ariaLabel: named('履歴を削除'),
-    onclick: () => deleteHistoryItem(item),
-  })
-  return el('li', { className: 'history-item' }, link, external, deleteButton)
+  return el('li', { className: 'history-item' }, link, itemActions(item))
 }
+
+// 一覧に一度に出す数（履歴が多くても、ページを開くのが遅くならないように）。「さらに表示」で増やす
+const PAGE_SIZE = 30
+let shown = PAGE_SIZE
+// 絞り込みの欄を出す件数。少ないうちは、目で探せる
+const SEARCH_FROM = 8
 
 function renderHistory() {
   const history = getHistory()
-  // 履歴が空でもインポートできるようセクションは常時表示し、意味のないボタンだけ隠す
+  renderResume(history[0])
+  searchInput.hidden = history.length <= SEARCH_FROM
+  if (searchInput.hidden) searchInput.value = ''
+  const query = searchInput.value.trim()
+  // いちばん上の作品は「続きを読む」に出ているので、一覧からは除く（絞り込むときは、それも含めて探す）
+  const items = query ? searchHistory(history, query) : history.slice(1)
+  count.textContent = !history.length ? '' : query ? `${items.length} / ${history.length} 作品` : `${history.length} 作品`
+  const empty = !history.length
+    ? 'まだ読んだ作品はありません。上の欄に作品の URL を貼ると、読み始められます（別の端末の履歴は、インポートで移せます）'
+    : query && !items.length
+      ? `「${query}」に合う作品はありません`
+      : ''
+  list.replaceChildren(...(empty ? [el('li', { className: 'history-empty', textContent: empty })] : items.slice(0, shown).map(historyItem)))
+  moreButton.hidden = items.length <= shown
+  moreButton.textContent = `さらに表示（残り ${items.length - shown} 件）`
+  // 意味のないボタンは隠す（インポートは、履歴が空でもできる）
   exportButton.hidden = clearButton.hidden = history.length === 0
-  list.replaceChildren(
-    ...(history.length
-      ? history.map(historyItem)
-      : [el('li', { className: 'history-empty', textContent: '履歴はありません（別の PC の履歴はエクスポート/インポートで移せます）' })]),
-  )
 }
 
 /** 履歴を保存して表示し直す */
@@ -159,6 +235,14 @@ importInput.addEventListener('change', () => {
 clearButton.addEventListener('click', () => {
   if (confirm('読書履歴をすべて削除しますか？')) updateHistory([], '読書履歴をすべて削除しました')
 })
+searchInput.addEventListener('input', () => {
+  shown = PAGE_SIZE
+  renderHistory()
+})
+moreButton.addEventListener('click', () => {
+  shown += PAGE_SIZE
+  renderHistory()
+})
 
 // ---- URL の入力 ----
 
@@ -176,6 +260,8 @@ form.addEventListener('submit', () => {
 // ---- 表示 ----
 
 renderHistory()
+// 初めて使うとき（履歴がないとき）は、操作方法を開いておく
+if (getHistory().length === 0) /** @type {HTMLDetailsElement} */ (document.getElementById('help')).open = true
 addEventListener('pageshow', (e) => {
   // 送信した後に「戻る」で戻ってきたときは、ボタンを元に戻す
   submitButton.disabled = false

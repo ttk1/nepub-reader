@@ -39,11 +39,11 @@ test('読んだ話を先頭に記録し、同じ作品の前の記録と置き�
   assert.match(history[0].last_accessed, /^\d{4}-\d\d-\d\dT/)
 })
 
-test('履歴は 50 件まで', async () => {
+test('履歴は 1000 件まで', async () => {
   const { getHistory, recordHistory } = await loadHistory()
-  for (let i = 0; i < 55; i++) recordHistory(entry({ novel_id: `n${i}` }))
-  assert.equal(getHistory().length, 50)
-  assert.equal(getHistory()[0].novel_id, 'n54')
+  for (let i = 0; i < 1005; i++) recordHistory(entry({ novel_id: `n${i}` }))
+  assert.equal(getHistory().length, 1000)
+  assert.equal(getHistory()[0].novel_id, 'n1004')
 })
 
 test('読書位置は、履歴が指している話のものだけを保存・復元する', async () => {
@@ -156,4 +156,19 @@ test('インポートする履歴は、既知の項目だけを残す', async ()
     position: undefined,
   })
   for (const junk of [null, 'x', 1, {}, { novel_id: 'n1' }, { last_episode: 1 }, { novel_id: 'n1', last_episode: {} }]) assert.equal(sanitizeHistoryItem(junk), null)
+})
+
+test('絞り込みは、作品名か話タイトルにすべての語を含む履歴を返し、全角と半角・大文字と小文字を区別しない', async () => {
+  const { searchHistory } = await loadHistory()
+  const history = [
+    entry({ novel_id: 'n1', novel_title: 'Ｒｅ：ゼロから始める異世界生活', episode_title: '茶会の対価' }),
+    entry({ novel_id: 'n2', novel_title: '異世界食堂', episode_title: 'メンチカツ' }),
+    entry({ novel_id: 'n3', novel_title: '薬屋のひとりごと', episode_title: '' }),
+  ]
+  const found = (query) => searchHistory(history, query).map((item) => item.novel_id)
+  assert.deepEqual(found('異世界'), ['n1', 'n2'])
+  assert.deepEqual(found('re:ゼロ'), ['n1'])
+  assert.deepEqual(found('異世界　メンチ'), ['n2']) // 語は全角の空白でも区切れ、話タイトルからも探す
+  assert.deepEqual(found('異世界 薬屋'), [])
+  assert.deepEqual(found('  '), ['n1', 'n2', 'n3'])
 })

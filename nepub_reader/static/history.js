@@ -2,7 +2,8 @@
 // トップページ（index.js）とリーダー（reader.js）で共有する。
 
 const HISTORY_KEY = 'nepub_reading_history'
-export const MAX_HISTORY = 50
+// 履歴に残す作品の数。保存先（localStorage）の容量に収まるようにするための、ゆるい上限
+export const MAX_HISTORY = 1000
 /** EpubReader の storageKey。表示設定が `<これ>:settings` に保存される（theme.js も読む） */
 export const READER_STORAGE_KEY = 'nepub-reader'
 
@@ -74,6 +75,16 @@ export function mergeHistory(current, imported) {
     if (!latest.has(key) || newer(item, latest.get(key))) latest.set(key, item)
   }
   return [...latest.values()].sort((a, b) => (newer(a, b) ? -1 : newer(b, a) ? 1 : 0))
+}
+
+/** 作品名か話タイトルに、語（空白で区切ったもの）をすべて含む履歴。全角と半角、大文字と小文字は区別しない */
+export function searchHistory(history, query) {
+  const normalize = (text) => text.normalize('NFKC').toLowerCase()
+  const words = normalize(query).split(/\s+/).filter(Boolean)
+  return history.filter((item) => {
+    const text = normalize(`${item.novel_title} ${item.episode_title}`)
+    return words.every((word) => text.includes(word))
+  })
 }
 
 // 以前の版は、読書位置を EpubReader に保存させていた（`nepub-reader:position:<site>:<作品 ID>:<話>`）。

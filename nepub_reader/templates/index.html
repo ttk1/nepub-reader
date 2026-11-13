@@ -12,50 +12,56 @@
 </head>
 <body>
     <header class="site-header">
-        <h1><img class="logo" src="/static/icon.svg" alt="" width="40" height="40">nepub-reader</h1>
-        <p class="tagline">「小説家になろう」「カクヨム」の作品を縦書きで快適に読むリーダー</p>
+        <h1><img class="logo" src="/static/icon.svg" alt="" width="28" height="28">nepub-reader</h1>
+        <p class="tagline">「小説家になろう」「カクヨム」を縦書きで読む</p>
     </header>
 
     <main>
         <noscript><p class="form-error" role="alert">読書履歴の表示には JavaScript が必要です。</p></noscript>
-        <section class="card">
+
+        <!-- 直前に読んでいた作品（index.js が中身を作る。履歴がなければ出さない） -->
+        <section class="resume" id="resume" aria-labelledby="resume-heading" hidden></section>
+
+        <section class="open">
             <form action="/go" method="get" id="url-form">
-                <label class="field-label" for="url-input">作品 URL を入力</label>
+                <label class="section-heading" for="url-input">URL から開く</label>
                 <div class="form-row">
                     <input type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" id="url-input" name="url" value="{{ url or '' }}" placeholder="https://ncode.syosetu.com/nXXXXXX/" required>
                     <button type="submit">読む</button>
                 </div>
             </form>
             {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
-            <p class="hint">
-                <b>小説家になろう</b>・<b>カクヨム</b>の、作品ページか話のページの URL（作品ページの URL なら最初の話から開きます）
-            </p>
+            <p class="hint">小説家になろう・カクヨムの、作品ページか話のページの URL（作品ページの URL なら最初の話から開きます）</p>
         </section>
 
-        <section class="card">
-            <div class="history-header">
-                <h2>最近読んだ作品</h2>
-                <span class="history-actions">
-                    <button type="button" class="history-action" id="history-import">インポート</button>
-                    <button type="button" class="history-action" id="history-export">エクスポート</button>
-                    <button type="button" class="history-action danger" id="history-clear">履歴をクリア</button>
-                </span>
+        <section class="shelf" aria-labelledby="history-heading">
+            <div class="shelf-header">
+                <h2 class="section-heading" id="history-heading">読書履歴</h2>
+                <span class="history-count" id="history-count"></span>
+                <input type="search" id="history-search" class="history-search" placeholder="作品名で絞り込む" aria-label="読書履歴を作品名で絞り込む" autocomplete="off" hidden>
             </div>
             <p class="history-message" id="history-message" role="status"></p>
             <ul class="history-list" id="history-list"></ul>
+            <button type="button" class="history-more" id="history-more" hidden></button>
+            <p class="history-actions">
+                <button type="button" class="quiet" id="history-import">インポート</button>
+                <button type="button" class="quiet" id="history-export">エクスポート</button>
+                <button type="button" class="quiet danger" id="history-clear">すべて削除</button>
+            </p>
             <input type="file" id="history-import-file" accept=".json,application/json" hidden>
         </section>
 
-        <section class="card">
-            <h2>操作方法</h2>
+        <details class="help" id="help">
+            <summary>操作方法</summary>
             <ul class="help-list">
                 <li><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> キー、ページの左右のクリック（タップ）、スワイプ、マウスホイールでページをめくります</li>
                 <li>最後のページから先へ進むと次の話、最初のページから戻ると前の話に移ります（ツールバーの「前の話」「次の話」や <kbd>P</kbd> <kbd>N</kbd> キーでも移れます）</li>
-                <li>ページの中央をクリック（タップ）すると、ツールバーを隠したり出したりできます</li>
-                <li>ツールバーの「Aa」で、文字サイズ・フォント・行間・表示幅・表示方向・テーマを変更できます</li>
+                <li>ツールバーの下の線のつまみを動かすと、その話の中の好きな位置へ移れます</li>
+                <li>ページの中央をクリック（タップ）すると、ツールバーを隠したり出したりできます（隠している間も、マウスを画面の上の端に寄せると出ます）</li>
+                <li>ツールバーの「Aa」で、文字サイズ・フォント・行間・表示幅・余白・表示方向・テーマを変更できます（このページの配色も、選んだテーマに合います）</li>
                 <li>作品ごとに最後に読んだ話の読書位置を覚えていて、続きから開きます</li>
             </ul>
-        </section>
+        </details>
     </main>
 
     <footer class="site-footer">

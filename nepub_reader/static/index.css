@@ -1,165 +1,279 @@
-/* トップページ。テーマは theme.js が <html data-theme="light | sepia | dark"> で指定する */
+/* トップページ。テーマは theme.js が <html data-theme="light | sepia | dark"> で指定する。
+   ページの背景と文字の色は、リーダー（epub-viewer の themes）と同じにしている: トップページとリーダーを
+   行き来しても、同じ紙の上にいるように見える */
 :root {
     color-scheme: light;
-    --bg-color: #f6f7f9;
-    --card-bg: #ffffff;
-    --text-color: #1f2328;
-    --text-secondary: #667085;
-    --border-color: #e4e7ec;
-    --accent: #2563eb;
-    --accent-soft: #eff4ff;
-    --button-bg: #2563eb;
-    --button-hover: #1d4ed8;
+    --bg: #ffffff;
+    --surface: #f5f4f1;
+    --text: #1a1a1a;
+    /* 小さな文字でも読めるコントラスト（--bg・--surface に対して 4.5:1 以上）にする */
+    --muted: #686560;
+    --line: #e2e0da;
+    --accent: #1a5fb4;
+    --button-bg: #1a1a1a;
     --button-fg: #ffffff;
-    --focus-ring: rgba(37, 99, 235, 0.2);
-    --input-bg: #ffffff;
-    --danger-color: #dc2626;
-    --danger-fill: #dc2626;
-    --danger-fill-fg: #ffffff;
-    --kbd-bg: #f2f4f7;
-    --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-    --badge-narou-bg: #e6f4ef;
-    --badge-narou-fg: #0e7a5f;
-    --badge-kakuyomu-bg: #e8efff;
-    --badge-kakuyomu-fg: #2e5bd7;
+    --button-hover: #3a3a3a;
+    --danger: #b3261e;
+    --cover-bg: #fbfaf7;
+    --cover-edge: #d9d5cb;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 6px 16px rgb(0 0 0 / 0.07);
+    --mincho: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", "IPAexMincho", "IPAMincho", serif;
+}
+:root[data-theme="sepia"] {
+    --bg: #f4ecd8;
+    --surface: #ebe1c9;
+    --text: #5b4636;
+    --muted: #6d5946;
+    --line: #dccfb2;
+    --accent: #8a4b08;
+    --button-bg: #5b4636;
+    --button-fg: #f8f1e0;
+    --button-hover: #453426;
+    --danger: #a3241c;
+    --cover-bg: #faf4e4;
+    --cover-edge: #cfbf9d;
+    --shadow: 0 1px 2px rgb(74 58 44 / 0.1), 0 6px 16px rgb(74 58 44 / 0.1);
 }
 :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg-color: #111418;
-    --card-bg: #1b2026;
-    --text-color: #e6e9ec;
-    --text-secondary: #98a2b3;
-    --border-color: #2c333b;
-    --accent: #4f8df9;
-    --accent-soft: #1d2836;
-    /* ダークモードのボタンは眩しくならないよう輝度を落とした青 +
-       純白でないテキストにする */
-    --button-bg: #2b57ad;
-    --button-hover: #4679e0;
-    --button-fg: #e8edf7;
-    --focus-ring: rgba(79, 141, 249, 0.3);
-    --input-bg: #14181d;
-    --danger-color: #f87171;
-    /* 塗りつぶし時は眩しくならないよう輝度を落とした赤 + オフホワイト */
-    --danger-fill: #a33b3b;
-    --danger-fill-fg: #f5e9e9;
-    --kbd-bg: #262d35;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --badge-narou-bg: #14332a;
-    --badge-narou-fg: #4cc2a2;
-    --badge-kakuyomu-bg: #1a2542;
-    --badge-kakuyomu-fg: #7ea4f8;
-}
-:root[data-theme="sepia"] {
-    --bg-color: #efe6d0;
-    --card-bg: #f8f1e0;
-    --text-color: #4a3a2c;
-    /* 小さな文字でも読めるコントラスト（背景に対して 4.5:1 以上）にする */
-    --text-secondary: #75614d;
-    --border-color: #dccfb4;
-    --accent: #8a4b08;
-    --accent-soft: #efe2c6;
-    --button-bg: #8a4b08;
-    --button-hover: #6f3c06;
-    --button-fg: #fff8ea;
-    --focus-ring: rgba(138, 75, 8, 0.25);
-    --input-bg: #fbf6e9;
-    --danger-color: #b3261e;
-    --danger-fill: #b3261e;
-    --kbd-bg: #eadfc6;
-    --shadow: 0 1px 2px rgba(74, 58, 44, 0.08);
-    --badge-narou-bg: #dfe9d2;
-    --badge-narou-fg: #2f6b3f;
-    --badge-kakuyomu-bg: #dde3ee;
+    --bg: #000000;
+    --surface: #121212;
+    /* リーダーと同じ、白ではない灰色の文字（黒いページでは、白い文字はまぶしい） */
+    --text: #acacac;
+    --muted: #8c8c8c;
+    --line: #2a2a2a;
+    --accent: #7fa3d9;
+    --button-bg: #2e2e2e;
+    --button-fg: #d4d4d4;
+    --button-hover: #3d3d3d;
+    --danger: #e0786f;
+    --cover-bg: #1a1a1a;
+    --cover-edge: #383838;
+    --shadow: none;
 }
 * { box-sizing: border-box; }
-/* キーボード操作時のフォーカスを見えるように */
-button:focus-visible, a:focus-visible {
+[hidden] { display: none !important; }
+:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Roboto, sans-serif;
-    max-width: 860px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 40px 20px 32px;
+    padding: 28px 20px 32px;
     line-height: 1.7;
-    background-color: var(--bg-color);
-    color: var(--text-color);
+    background-color: var(--bg);
+    color: var(--text);
 }
+button, input { font: inherit; color: inherit; }
 
 /* ---- ヘッダー ---- */
 .site-header {
-    text-align: center;
-    margin-bottom: 32px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
 }
 .site-header h1 {
     margin: 0;
-    font-size: 1.9em;
-    letter-spacing: 0.01em;
+    font-size: 1.15em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 /* アイコンと同じ絵。角を丸くして、文字の高さに合わせる */
 .site-header .logo {
-    width: 1.15em;
-    height: 1.15em;
-    margin-right: 0.35em;
+    width: 1.3em;
+    height: 1.3em;
+    margin-right: 0.45em;
     border-radius: 22%;
-    vertical-align: -0.22em;
+    vertical-align: -0.28em;
 }
 .site-header .tagline {
-    margin: 6px 0 0;
-    color: var(--text-secondary);
-    font-size: 0.95em;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8em;
 }
 
-/* ---- カード ---- */
-.card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    padding: 20px 24px;
-    margin: 20px 0;
+main > * { margin: 36px 0 0; }
+.section-heading {
+    display: block;
+    margin: 0;
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--muted);
 }
-.card h2, .field-label {
+
+/* ---- 続きを読む ---- */
+.resume {
+    position: relative;
+    margin-top: 28px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+}
+.resume-link {
+    display: flex;
+    align-items: stretch;
+    gap: 24px;
+    padding: 24px;
+    border-radius: inherit;
+    text-decoration: none;
+    color: inherit;
+}
+/* 表紙のない作品に、作品名を縦書きにした札を表紙の代わりに付ける（右とじの本の形。右の辺が背） */
+.cover {
+    flex: none;
+    width: 128px;
+    height: 180px;
+    padding: 14px 16px 14px 10px;
+    overflow: hidden;
+    border: 1px solid var(--cover-edge);
+    border-right-width: 5px;
+    border-radius: 6px 3px 3px 6px;
+    background: var(--cover-bg);
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease;
+    /* 札そのものを縦書きの箱にする: 長い作品名は左（終わりの側）へあふれて切れ、書き出しは必ず見える
+       （中の要素だけを縦書きにすると、箱が中身の幅まで広がって右へあふれ、書き出しが切れる） */
+    writing-mode: vertical-rl;
+    position: relative;
+}
+/* あふれた分が、左の端で薄くなって消えるようにする */
+.cover::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 22px;
+    background: linear-gradient(to right, var(--cover-bg) 35%, transparent);
+}
+.cover-title {
+    font-family: var(--mincho);
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.5;
+}
+.cover[data-length="short"] .cover-title { font-size: 21px; letter-spacing: 0.06em; }
+.cover[data-length="long"] .cover-title { font-size: 12.5px; }
+.resume-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.resume-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+    margin: 6px 0 0;
+    font-family: var(--mincho);
+    font-size: 1.45em;
+    font-weight: 600;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+.resume-episode {
+    margin: 6px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.resume-meta {
+    margin: 2px 0 0;
+    font-size: 0.8em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+/* 下にそろえる: 作品名が短くても、進み具合とボタンは札の下端に並ぶ */
+.resume-foot {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 0 0 12px;
-    font-size: 1.0em;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    margin-top: auto;
+    padding-top: 16px;
+    /* 右下に重ねる操作（.item-actions）の分を空けておく */
+    padding-right: 76px;
+}
+.resume-go {
+    padding: 8px 22px;
+    border-radius: 999px;
+    background: var(--button-bg);
+    color: var(--button-fg);
     font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.15s ease;
 }
-/* 見出しのアクセントバー */
-.card h2::before, .field-label::before {
-    content: "";
-    width: 4px;
-    height: 14px;
+.resume-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+/* 元サイトへのリンクと削除。リンクの中にリンクは置けないので、カードの右下に重ねる */
+.resume > .item-actions {
+    position: absolute;
+    right: 14px;
+    bottom: 22px;
+}
+@media (hover: hover) {
+    .resume-link:hover .resume-go { background: var(--button-hover); }
+    .resume-link:hover .cover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cover { transition: none; }
+}
+
+/* その話をどこまで読んだか */
+.progress {
+    display: block;
+    width: 72px;
+    height: 3px;
     border-radius: 2px;
-    background: var(--accent);
-    flex-shrink: 0;
+    background: var(--line);
+    overflow: hidden;
 }
+.progress > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+}
+
+/* ---- URL から開く ---- */
 .form-row {
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+#url-input, .history-search {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg);
+    transition: border-color 0.15s ease;
 }
 #url-input {
     flex: 1;
-    min-width: 240px;
+    min-width: 0;
     padding: 10px 14px;
+    /* 16px 未満だと、iOS は入力するときにページを拡大する */
     font-size: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--input-bg);
-    color: var(--text-color);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-/* 入力した文字（--text-color）より薄い色。読める濃さは保つ（背景に対して 4.5:1 以上） */
-#url-input::placeholder { color: var(--text-secondary); opacity: 1; }
-#url-input:focus {
-    outline: none;
+/* 入力した文字より薄い色。読める濃さは保つ */
+#url-input::placeholder, .history-search::placeholder { color: var(--muted); opacity: 1; }
+#url-input:focus-visible, .history-search:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 button[type="submit"] {
     padding: 10px 24px;
@@ -168,83 +282,56 @@ button[type="submit"] {
     background: var(--button-bg);
     color: var(--button-fg);
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
+    white-space: nowrap;
     transition: background 0.15s ease;
 }
 button[type="submit"]:hover { background: var(--button-hover); }
 /* 送信してから画面が変わるまで（カクヨムの作品ページは、最初の話を調べるのに少しかかる） */
 button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
 .hint {
-    font-size: 0.85em;
-    color: var(--text-secondary);
-    margin: 12px 0 0;
+    font-size: 0.8em;
+    color: var(--muted);
+    margin: 8px 0 0;
 }
-.hint b { color: var(--text-color); font-weight: 600; }
 .form-error {
-    margin: 12px 0 0;
+    margin: 10px 0 0;
     font-size: 0.9em;
-    color: var(--danger-color);
+    color: var(--danger);
 }
 
-/* ---- 履歴 ---- */
-.history-header {
+/* ---- 読書履歴 ---- */
+.shelf-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 6px;
+    min-height: 36px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
 }
-.history-header h2 { margin: 0; }
-.history-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.history-action {
-    background: transparent;
-    color: var(--text-secondary);
+.history-count {
     font-size: 0.8em;
-    padding: 4px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
-.history-action:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-    color: var(--accent);
-}
-/* 全消去は危険操作なので他のボタンと見た目を分け、距離も取る。
-   小さな文字なので、控えめに見せるために薄くはしない（読めるコントラストを保つ） */
-.history-action.danger {
-    color: var(--danger-color);
-    border-color: var(--danger-color);
-    margin-left: 12px;
-}
-.history-action.danger:hover {
-    background: var(--danger-fill);
-    border-color: var(--danger-fill);
-    color: var(--danger-fill-fg);
-}
-/* スマホ幅でも 3 つのボタンが 1 行に収まるようにする */
-@media (max-width: 480px) {
-    .history-action { padding: 4px 7px; }
+.history-search {
+    margin-left: auto;
+    width: min(16em, 55%);
+    padding: 5px 12px;
+    font-size: 16px;
 }
 /* 取り込みや削除の結果。空のときは場所を取らない */
 .history-message {
     display: flex;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     margin: 0;
     font-size: 0.85em;
-    color: var(--text-secondary);
+    color: var(--muted);
 }
-.history-message:not(:empty) { padding: 6px 0; }
+.history-message:not(:empty) { padding: 10px 0 2px; }
 .history-list {
     list-style: none;
     padding: 0;
@@ -253,136 +340,152 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
 .history-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    border-bottom: 1px solid var(--border-color);
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
 }
-.history-item:last-child { border-bottom: none; }
 .history-link {
     flex: 1;
     /* 長い話タイトルを省略できるように（既定の min-width: auto だと行からはみ出す） */
     min-width: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px 16px;
-    flex-wrap: wrap;
-    padding: 10px 8px;
-    margin: 0 -8px;
-    border-radius: 8px;
+    gap: 4px 20px;
+    padding: 12px 10px;
+    margin: 0 -10px;
+    border-radius: 10px;
     text-decoration: none;
     color: inherit;
     transition: background 0.15s ease;
 }
-.history-link:hover { background: var(--accent-soft); }
+@media (hover: hover) {
+    .history-link:hover { background: var(--surface); }
+}
 .history-text {
     flex: 1;
-    /* 狭い画面では、日時とバッジを作品名の下に折り返す */
-    min-width: min(200px, 100%);
+    min-width: 0;
 }
 .history-title {
-    /* 旧形式の長いタイトルでも行が嵩まないよう最大3行で省略 */
+    /* 長い作品名でも行が嵩まないよう、2 行で省略する */
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    font-weight: 500;
-    color: var(--accent);
-    word-break: break-word;
+    font-family: var(--mincho);
+    font-size: 1.05em;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 .history-episode {
     display: block;
+    margin-top: 2px;
     font-size: 0.8em;
-    color: var(--text-secondary);
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.history-site { margin-right: 0.8em; }
 .history-meta {
+    flex: none;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
     font-size: 0.8em;
-    color: var(--text-secondary);
+    color: var(--muted);
     white-space: nowrap;
     /* 数字の桁幅を揃えて列のガタつきを抑える */
     font-variant-numeric: tabular-nums;
 }
-/* バッジを右端の固定幅列にすることで、行ごとに文字数が違っても
-   縦の列として揃う（日時はバッジの左に密着して右揃えになる） */
-.badge {
-    display: inline-block;
-    min-width: 4.6em;
-    text-align: center;
-    box-sizing: border-box;
-    font-size: 0.9em;
-    line-height: 1.4;
-    padding: 0 8px;
-    border-radius: 999px;
-    font-weight: 600;
-}
-.badge-narou { background: var(--badge-narou-bg); color: var(--badge-narou-fg); }
-.badge-kakuyomu { background: var(--badge-kakuyomu-bg); color: var(--badge-kakuyomu-fg); }
-.history-external {
-    display: flex;
-    align-items: center;
-    color: var(--text-secondary);
-    padding: 6px 8px;
-    border-radius: 6px;
-    opacity: 0.9; /* 控えめに見せるが、アイコンとして見分けられる濃さ（3:1 以上）は保つ */
-    flex-shrink: 0;
-    transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-}
-.history-external:hover {
-    opacity: 1;
-    background: var(--accent-soft);
-    color: var(--accent);
-}
-.history-external svg { display: block; }
-.history-delete {
-    background: transparent;
-    color: var(--danger-color);
-    font-size: 0.9em;
-    line-height: 1;
-    padding: 6px 9px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    opacity: 0.9;
-    flex-shrink: 0;
-    transition: background 0.15s ease, opacity 0.15s ease;
-    /* 隣の外部リンクと押し間違えないよう、仕切り線を挟んで距離を取る */
-    margin-left: 16px;
-    position: relative;
-}
-.history-delete::before {
-    content: "";
-    position: absolute;
-    left: -9px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 16px;
-    background: var(--border-color);
-}
-.history-delete:hover {
-    opacity: 1;
-    background: var(--danger-fill);
-    color: var(--danger-fill-fg);
-}
+.history-meta .progress { width: 56px; }
 .history-empty {
-    font-size: 0.85em;
-    color: var(--text-secondary);
-    padding: 8px 0;
+    padding: 20px 0 6px;
+    font-size: 0.9em;
+    color: var(--muted);
 }
 
-/* ---- 操作方法 ---- */
-.help-list {
-    list-style: none;
+/* 作品ごとの操作（元サイトで開く・履歴から削除）。読むのを邪魔しないよう、色は付けない */
+.item-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+}
+.item-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    margin: 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.item-action svg { display: block; }
+@media (hover: hover) {
+    .item-action:hover { background: var(--line); color: var(--text); }
+    .item-action.danger:hover { color: var(--danger); }
+}
+
+.history-more {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: none;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.history-more:hover { background: var(--surface); }
+/* 履歴の管理。ふだんは使わないので、一覧の下に小さく置く */
+.history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+    margin: 10px 0 0;
+}
+.quiet {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-size: 0.8em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.quiet:hover { background: var(--surface); color: var(--text); }
+.quiet.danger:hover { color: var(--danger); }
+/* 知らせの中のボタン（「元に戻す」）は、押せることが分かるように枠を付ける */
+.history-message .quiet { border: 1px solid var(--line); color: var(--text); }
+
+/* ---- 操作方法 ---- */
+.help {
     font-size: 0.85em;
-    color: var(--text-secondary);
+    color: var(--muted);
+}
+.help summary {
+    width: fit-content;
+    padding: 2px 6px;
+    margin-left: -6px;
+    border-radius: 6px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+}
+.help-list {
+    margin: 8px 0 0;
+    padding: 0 0 0 1.4em;
 }
 .help-list li { padding: 3px 0; }
 kbd {
@@ -392,17 +495,47 @@ kbd {
     padding: 1px 5px;
     font-size: 0.9em;
     font-family: inherit;
-    color: var(--text-color);
-    background: var(--kbd-bg);
-    border: 1px solid var(--border-color);
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--line);
     border-bottom-width: 2px;
     border-radius: 5px;
 }
 
 /* ---- フッター ---- */
 .site-footer {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
     text-align: center;
     font-size: 0.75em;
-    color: var(--text-secondary);
-    margin-top: 28px;
+    color: var(--muted);
 }
+
+/* ---- 狭い画面 ---- */
+@media (max-width: 560px) {
+    body { padding: 20px 16px 28px; }
+    .resume-link { gap: 16px; padding: 16px; }
+    .cover { width: 92px; height: 132px; padding: 10px 12px 10px 8px; }
+    .cover-title { font-size: 12.5px; }
+    .cover[data-length="short"] .cover-title { font-size: 16px; }
+    .cover[data-length="long"] .cover-title { font-size: 11px; }
+    .resume-title { font-size: 1.15em; }
+    .resume-episode { font-size: 0.9em; }
+    .resume-go { padding: 7px 18px; }
+    /* 幅が足りないので、進み具合は線だけにする */
+    .resume-foot { gap: 12px; padding-right: 68px; }
+    .resume-progress { font-size: 0; gap: 0; }
+    .resume-progress .progress { width: 44px; }
+    .resume > .item-actions { right: 8px; bottom: 12px; }
+    /* 日時と進み具合を、作品名の下に 1 行で並べる */
+    .history-link { flex-direction: column; align-items: stretch; }
+    .history-meta { flex-direction: row; align-items: center; gap: 10px; }
+}
+
+/* ---- 広い画面 ---- */
+/* 4K のディスプレイやテレビでは、既定の大きさのままだと画面のまんなかに小さく出る（離れて読むことも多い）。
+   画面の幅に合わせて、ページ全体を拡大する。リーダーの文字サイズの既定が、大きな画面向けに大きいのと同じ考え方 */
+@media (min-width: 2400px) { body { zoom: 1.25; } }
+@media (min-width: 3000px) { body { zoom: 1.5; } }
+@media (min-width: 3600px) { body { zoom: 1.75; } }
