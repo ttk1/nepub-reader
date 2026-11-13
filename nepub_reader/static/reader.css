@@ -30,6 +30,47 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
     box-shadow: 0 2px 12px rgb(0 0 0 / 0.18);
 }
 
+/* ツールバーを隠している間の、進み具合の表示（reader.js）。ページの余白に重ねる（余白が足りないときの扱いは下）。
+   クリックやスワイプは、下にあるページへそのまま届かせる */
+.epub-reader > .mini-progress {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+/* 画面の上の端の細い線。読み終えた分だけ塗る（ツールバーの下の線と同じ見せ方） */
+.mini-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    opacity: 0.5;
+    background: linear-gradient(to right, currentColor calc(var(--fraction, 0) * 100%), transparent 0);
+}
+.mini-line[data-from="right"] { background: linear-gradient(to left, currentColor calc(var(--fraction, 0) * 100%), transparent 0); }
+/* 下の中央の「ページ / 全ページ（%）」（紙の本のノンブルの位置。縦書きでは行の終わりがいつも下にあるので、目に入りやすい。
+   右下の隅は目をやりにくかった）。大きさ（--mini-size）は、広い画面ほど大きくする（このファイルの末尾）。
+   本文より控えめにするが、小さな文字なので、どのテーマでも読める濃さ（背景に対して 4.5:1 以上）は保つ */
+.epub-reader { --mini-size: 12px; }
+.mini-text {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 2px;
+    font-size: var(--mini-size);
+    line-height: 1;
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+/* 本文は、下の端からページの余白（--page-margin。reader.js が表示設定から入れる）の分だけ上で終わる。
+   余白が文字より狭いとき（余白「狭い」の 16px に、広い画面の 18px の文字など）は、文字が本文に重なるので、
+   足りない分だけページの下を空ける。余白が足りていれば 0 で、ページは画面いっぱいのまま。
+   文字を余白に合わせて小さくはしない（広い画面で読めない大きさになる） */
+#reader { box-sizing: border-box; }
+.epub-reader.toolbar-hidden { padding-bottom: max(0px, var(--mini-size) + 4px - var(--page-margin, 32px)); }
+
 /* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */
 #status {
     position: fixed;
@@ -78,7 +119,8 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
 
 /* ---- 広い画面 ---- */
 /* 4K のディスプレイやテレビでは、ツールバーと知らせが小さく見える（本文は、利用者が決めた文字サイズで表示される）。
-   トップページ（index.css）と同じ幅と倍率で拡大する */
-@media (min-width: 2400px) { .epub-reader > .toolbar, #status { zoom: 1.25; } }
-@media (min-width: 3000px) { .epub-reader > .toolbar, #status { zoom: 1.5; } }
-@media (min-width: 3600px) { .epub-reader > .toolbar, #status { zoom: 1.75; } }
+   トップページ（index.css）と同じ幅と倍率で拡大する。隠している間の進み具合の文字は、下を空ける量の計算に使うので、
+   拡大ではなく文字の大きさで合わせる（同じ倍率） */
+@media (min-width: 2400px) { .epub-reader > .toolbar, #status { zoom: 1.25; } .epub-reader { --mini-size: 15px; } }
+@media (min-width: 3000px) { .epub-reader > .toolbar, #status { zoom: 1.5; } .epub-reader { --mini-size: 18px; } }
+@media (min-width: 3600px) { .epub-reader > .toolbar, #status { zoom: 1.75; } .epub-reader { --mini-size: 21px; } }

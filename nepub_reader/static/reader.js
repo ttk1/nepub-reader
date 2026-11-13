@@ -63,6 +63,29 @@ const sourceLink = toolbar.appendChild(el('a', { className: 'source', textConten
 // 読み込み中・最新話などの知らせ。ツールバーを隠していても見えるよう、ページの上に重ねて出す
 const status = document.body.appendChild(el('div', { id: 'status', role: 'status' }))
 
+/** リーダーの枠（EpubReader に渡した要素） */
+const root = toolbar.parentElement
+
+// ツールバーを隠している間の、進み具合の表示。どこまで読んだかはいつも見ていたいが、そのためにツールバーを
+// 出しておくと、その分ページが狭くなる。ページの余白に重ねて出す（reader.css）。
+// リーダーの枠の中に置いて、テーマの文字色を引き継ぐ
+const miniLine = el('span', { className: 'mini-line' })
+const miniText = el('span', { className: 'mini-text' })
+const miniProgress = root.appendChild(el('div', { className: 'mini-progress', hidden: true }, miniLine, miniText))
+// ページの余白（表示設定）。余白が進み具合の文字より狭いときに、足りない分だけページの下を空けるのに使う（reader.css）。
+// 設定を変えると本文が組み直されて relocate が起きるので、そのたびに入れ直す
+const setPageMargin = () => root.style.setProperty('--page-margin', `${reader.settings.margin}px`)
+setPageMargin()
+viewer.addEventListener('relocate', (e) => {
+  const { page, pages, fraction, rtl } = e.detail
+  // ツールバーの進み具合と同じ書き方にする
+  miniText.textContent = `${page + 1} / ${pages}（${Math.round(fraction * 100)}%）`
+  miniLine.style.setProperty('--fraction', String(fraction))
+  // 線は、ページが進む向きに伸びる（縦書きでは右から）
+  miniLine.dataset.from = rtl ? 'right' : 'left'
+  setPageMargin()
+})
+
 /** 知らせを出す（'' で消す）。action は一緒に出すボタン { label, run } */
 function setStatus(text, action) {
   status.replaceChildren(...(text ? [text] : []))
@@ -224,9 +247,12 @@ try {
 function showToolbar() {
   // のぞいている間は、ページの上に重ねて出す（reader.css の .peek）。ページの大きさが変わらないので、
   // マウスを動かすたびに本文が組み直されない。ページの大きさが変わらない順に切り替える
-  if (peeking) toolbar.parentElement.classList.add('peek')
+  if (peeking) root.classList.add('peek')
   toolbar.hidden = toolbarHidden && !peeking
-  if (!peeking) toolbar.parentElement.classList.remove('peek')
+  miniProgress.hidden = !toolbar.hidden
+  if (!peeking) root.classList.remove('peek')
+  // 進み具合の文字の場所は、のぞいている間も空けたままにする（ページの大きさを変えないため）
+  root.classList.toggle('toolbar-hidden', toolbarHidden)
 }
 showToolbar()
 
