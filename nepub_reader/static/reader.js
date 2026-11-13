@@ -25,7 +25,11 @@ const el = (tag, props, ...children) => {
   return element
 }
 
-const reader = new EpubReader(document.getElementById('reader'), { storage: settingsStorage, storageKey: READER_STORAGE_KEY })
+// EpubReader の既定の文字サイズ（45px）は、離れて読む大きな画面向け。スマートフォンでは 1 ページに
+// 数文字しか入らないので、狭い画面では初期値を小さくする（利用者が変えた後は、その値が使われる）
+const settings = matchMedia('(max-width: 600px)').matches ? { fontSize: 24 } : {}
+
+const reader = new EpubReader(document.getElementById('reader'), { storage: settingsStorage, storageKey: READER_STORAGE_KEY, settings })
 const { toolbar, viewer } = reader
 const title = toolbar.querySelector('.title')
 
