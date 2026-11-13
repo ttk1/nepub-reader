@@ -150,6 +150,23 @@ class GetEpubTest(CacheTestCase):
         with zipfile.ZipFile(path) as zf:
             self.assertEqual(zf.namelist()[0], "mimetype")
 
+    def test_narou_with_illustrations(self):
+        # 同じ挿絵が 2 回出てくる話。挿絵の取得（nepub のパーサーが行う）は差し替える
+        image_url = "//12345.mitemin.net/userpageimage/viewimagebig/icode/i678901/"
+        image = {"id": "0123abcd", "name": "0123abcd.png", "type": "image/png", "data": b"png"}
+        self.pages["https://ncode.syosetu.com/n1234ab/3/"] = NAROU_PAGE.replace(
+            '<p id="L2">', f'<p id="L3"><img alt="挿絵" src="{image_url}"></p><p id="L4"><img src="{image_url}"></p><p id="L2">'
+        )
+        with mock.patch("nepub.parser.narou.get_image", return_value=image) as get_image:
+            path, _ = episodes.get_epub("narou", "n1234ab", "3")
+
+        get_image.assert_called_with(f"https:{image_url}")
+        with zipfile.ZipFile(path) as zf:
+            self.assertEqual([name for name in zf.namelist() if name.startswith("src/image/")], ["src/image/0123abcd.png"])
+            self.assertEqual(zf.read("src/image/0123abcd.png"), b"png")
+        self.assertEqual(read_epub(path, "src/content.opf").count('href="image/0123abcd.png"'), 1)
+        self.assertIn('<img alt="挿絵" src="../image/0123abcd.png"/>', read_epub(path, "src/text/3.xhtml"))
+
     def test_cached_episode_is_not_fetched_again(self):
         self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
         episodes.get_epub("narou", "n1234ab", "12")
