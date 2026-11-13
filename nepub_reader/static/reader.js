@@ -242,12 +242,13 @@ viewer.addEventListener('tap', () => {
 
 // 隠したツールバーは、戻し方（ページの中央を押す）を忘れると出せなくなる。マウスを画面の上の端（ツールバーが
 // あったあたり）に寄せたら出し、離れたら隠す。タッチ操作には、寄せるという動きがないので働かせない
-const PEEK_ZONE = 48
+// ツールバーの高さより少し広い範囲。広い画面ではツールバーを拡大している（reader.css）ので、その分広げる
+const peekZone = () => 48 * (Number(getComputedStyle(toolbar).zoom) || 1)
 /** マウスが動いた。y は画面の上の端からの位置、onToolbar はツールバー（メニューを含む）の上にあるか */
 function onMouseMove(y, onToolbar) {
   if (!toolbarHidden) return
   // メニューを開いている間は、マウスが離れても隠さない（メニューを閉じた後で、離れていれば隠す）
-  const wanted = onToolbar || y <= PEEK_ZONE || (peeking && toolbar.querySelector('details[open]') !== null)
+  const wanted = onToolbar || y <= peekZone() || (peeking && toolbar.querySelector('details[open]') !== null)
   if (wanted === peeking) return
   peeking = wanted
   showToolbar()

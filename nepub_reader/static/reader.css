@@ -75,3 +75,10 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
     pointer-events: auto;
 }
 #status button:hover { background: rgb(255 255 255 / 0.15); }
+
+/* ---- 広い画面 ---- */
+/* 4K のディスプレイやテレビでは、ツールバーと知らせが小さく見える（本文は、利用者が決めた文字サイズで表示される）。
+   トップページ（index.css）と同じ幅と倍率で拡大する */
+@media (min-width: 2400px) { .epub-reader > .toolbar, #status { zoom: 1.25; } }
+@media (min-width: 3000px) { .epub-reader > .toolbar, #status { zoom: 1.5; } }
+@media (min-width: 3600px) { .epub-reader > .toolbar, #status { zoom: 1.75; } }

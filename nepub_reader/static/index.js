@@ -45,7 +45,9 @@ function formatDate(isoString) {
   if (minutes < 60) return `${minutes}分前`
   if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}時間前`
   if (minutes < 60 * 24 * 7) return `${Math.floor(minutes / (60 * 24))}日前`
-  return date.toLocaleDateString('ja-JP')
+  // 今年の日付は、年を省く
+  const day = `${date.getMonth() + 1}月${date.getDate()}日`
+  return date.getFullYear() === new Date().getFullYear() ? day : `${date.getFullYear()}年${day}`
 }
 
 // 旧形式の履歴に残っているサイト名は表示時に取る
@@ -54,8 +56,10 @@ const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.l
 /** 履歴の話を開くリーダー画面 */
 const readUrl = (item) => `/read/${item.site}/${encodeURIComponent(item.novel_id)}/${encodeURIComponent(item.last_episode)}`
 
-// カクヨムの last_episode はエピソード ID なので話数は出せない。話タイトルのない履歴（なろうの短編）にも出さない
-const episodeNumber = (item) => (item.site === 'narou' && item.episode_title ? `第${item.last_episode}話` : '')
+// 作品の中で何番目の話か。作者が話タイトルに付けた話数（「第 946 話」など。閑話や番外編があるとずれる）と
+// 食い違って見えないよう、「第 N 話」ではなく「N 話目」と書く。
+// カクヨムの last_episode はエピソード ID なので出せない。話タイトルのない履歴（なろうの短編）にも出さない
+const episodeNumber = (item) => (item.site === 'narou' && item.episode_title ? `${item.last_episode} 話目` : '')
 
 /** その話をどこまで読んだか（%）。読書位置のない履歴では null */
 const readPercent = (item) => (item.position ? Math.round(Math.min(1, Math.max(0, item.position.progress)) * 100) : null)
@@ -145,7 +149,8 @@ function historyItem(item) {
         [episodeNumber(item), item.episode_title].filter(Boolean).join('　'),
       ),
     ),
-    el('span', { className: 'history-meta' }, el('span', { textContent: formatDate(item.last_accessed) }), ...(percent === null ? [] : [progressBar(percent)])),
+    // 読み始めていない話（0%）には線を出さない（空の線は、区切りの線のように見える）
+    el('span', { className: 'history-meta' }, el('span', { textContent: formatDate(item.last_accessed) }), ...(percent ? [progressBar(percent)] : [])),
   )
   return el('li', { className: 'history-item' }, link, itemActions(item))
 }
