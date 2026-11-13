@@ -1,0 +1,209 @@
+"""話の取得と EPUB の生成・キャッシュのテスト（元サイトへはアクセスしない）"""
+
+import json
+import tempfile
+import unittest
+import urllib.error
+import zipfile
+from pathlib import Path
+from unittest import mock
+
+from nepub_reader import episodes
+
+NAROU_PAGE = """<html><head><title>作品 &amp; 名 - 第12話 はじまり</title></head><body>
+<h1 class="p-novel__title">第12話 はじまり</h1>
+<div><p id="L1">　本文です。</p><p id="L2"><ruby>漢字<rt>かんじ</rt></ruby>の段落</p></div>
+</body></html>"""
+
+KAKUYOMU_PAGE = """<html><head><title>第1話 旅立ち - 作品名（作者名） - カクヨム</title></head><body>
+<p class="widget-episodeTitle">第1話 旅立ち</p>
+<div><p id="p1">本文です。</p></div>
+<a id="contentMain-readPreviousEpisode" class="x" href="/works/100/episodes/199">前</a>
+<a href="/works/100/episodes/201" class="x" id="contentMain-readNextEpisode">次</a>
+</body></html>"""
+
+KAKUYOMU_WORK_PAGE = """<html><body><script id="__NEXT_DATA__" type="application/json">%s</script></body></html>""" % json.dumps(
+    {
+        "query": {"workId": "100"},
+        "props": {
+            "pageProps": {
+                "__APOLLO_STATE__": {
+                    "Work:100": {
+                        "title": "作品名",
+                        "author": {"__ref": "UserAccount:1"},
+                        "tableOfContentsV2": [{"__ref": "Toc:1"}],
+                    },
+                    "UserAccount:1": {"activityName": "作者名"},
+                    "Toc:1": {"chapter": None, "episodeUnions": [{"__ref": "Episode:200"}, {"__ref": "Episode:201"}]},
+                    "Episode:200": {"id": "200", "publishedAt": "2026-01-01T00:00:00Z"},
+                    "Episode:201": {"id": "201", "publishedAt": "2026-01-02T00:00:00Z"},
+                }
+            }
+        },
+    }
+)
+
+
+class ParseUrlTest(unittest.TestCase):
+    def test_narou(self):
+        self.assertEqual(episodes.parse_url("https://ncode.syosetu.com/n1234ab/12/"), ("narou", "n1234ab", "12"))
+        self.assertEqual(episodes.parse_url(" https://ncode.syosetu.com/N1234AB/ "), ("narou", "n1234ab", None))
+        self.assertEqual(episodes.parse_url("http://ncode.syosetu.com/n1234ab/012"), ("narou", "n1234ab", "12"))
+
+    def test_kakuyomu(self):
+        self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100/episodes/200"), ("kakuyomu", "100", "200"))
+        self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100"), ("kakuyomu", "100", None))
+
+    def test_query_and_fragment_are_ignored(self):
+        self.assertEqual(episodes.parse_url("https://kakuyomu.jp/works/100/episodes/200?x=1#p3"), ("kakuyomu", "100", "200"))
+
+    def test_unsupported(self):
+        for url in [
+            "",
+            "https://example.com/",
+            "https://ncode.syosetu.com/",
+            "https://ncode.syosetu.com/n1234ab/12/extra",
+            "https://evil.example/https://ncode.syosetu.com/n1234ab/1/",
+            "https://ncode.syosetu.com.evil.example/n1234ab/1/",
+            "javascript:alert(1)",
+        ]:
+            self.assertIsNone(episodes.parse_url(url), url)
+
+
+class IsValidEpisodeTest(unittest.TestCase):
+    def test_valid(self):
+        self.assertTrue(episodes.is_valid_episode("narou", "n1234ab", "1"))
+        self.assertTrue(episodes.is_valid_episode("narou", "n1234ab", "10000"))
+        self.assertTrue(episodes.is_valid_episode("kakuyomu", "100", "12345678901234567890"))  # 実際のエピソード ID と同じ 20 桁
+
+    def test_invalid(self):
+        for site, novel_id, episode in [
+            ("narou", "n1234ab", "0"),
+            ("narou", "n1234ab", "01"),
+            ("narou", "n1234ab", "10001"),
+            ("narou", "N1234AB", "1"),
+            ("narou", "../etc", "1"),
+            ("narou", "n1234ab", "1\n"),
+            ("kakuyomu", "100", "abc"),
+            ("kakuyomu", "1" * 31, "1"),
+            ("other", "100", "1"),
+        ]:
+            self.assertFalse(episodes.is_valid_episode(site, novel_id, episode), (site, novel_id, episode))
+
+
+class NovelTitleTest(unittest.TestCase):
+    def test_narou(self):
+        self.assertEqual(episodes.clean_narou_novel_title("作品名 - 第1話", "第1話"), "作品名")
+        self.assertEqual(episodes.clean_narou_novel_title("作品名 - 第1話", ""), "作品名 - 第1話")
+
+    def test_kakuyomu(self):
+        clean = episodes.clean_kakuyomu_novel_title
+        self.assertEqual(clean("第1話 旅立ち - 作品名（作者名） - カクヨム", "第1話 旅立ち"), "作品名")
+        self.assertEqual(clean("第1話 - 作品（上）（作者名） - カクヨム", "第1話"), "作品（上）")
+        # 話タイトルが分からなくても、サイト名と作者名は取る
+        self.assertEqual(clean("第1話 - 作品名（作者名） - カクヨム", ""), "第1話 - 作品名")
+
+
+class CacheTestCase(unittest.TestCase):
+    """キャッシュ先を一時フォルダにし、元サイトの応答を pages（URL → HTML か例外）で差し替える"""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cache_dir = Path(tmp.name)
+        self.pages: dict[str, str | Exception] = {}
+        self.fetched: list[str] = []
+
+        def get(url):
+            self.fetched.append(url)
+            page = self.pages[url]
+            if isinstance(page, Exception):
+                raise page
+            return page
+
+        for target, value in [("CACHE_DIR", self.cache_dir), ("get", get)]:
+            patcher = mock.patch.object(episodes, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+
+def read_epub(path: Path, name: str) -> str:
+    with zipfile.ZipFile(path) as zf:
+        return zf.read(name).decode("utf-8")
+
+
+class GetEpubTest(CacheTestCase):
+    def test_narou(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        path, adjacent = episodes.get_epub("narou", "n1234ab", "12")
+
+        self.assertEqual(path, self.cache_dir / "narou" / "n1234ab_12.epub")
+        self.assertIsNone(adjacent)
+        # 作品名は <title> から話タイトルを除いたもの（縦中横の加工で話タイトルが変わっても取り除ける）
+        self.assertIn("<dc:title id=\"title\">作品 &amp; 名</dc:title>", read_epub(path, "src/content.opf"))
+        text = read_epub(path, "src/text/12.xhtml")
+        self.assertIn("本文です。", text)
+        self.assertIn("<ruby>漢字<rt>かんじ</rt></ruby>", text)
+        with zipfile.ZipFile(path) as zf:
+            self.assertEqual(zf.namelist()[0], "mimetype")
+
+    def test_cached_episode_is_not_fetched_again(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/12/"] = NAROU_PAGE
+        episodes.get_epub("narou", "n1234ab", "12")
+        episodes.get_epub("narou", "n1234ab", "12")
+        self.assertEqual(len(self.fetched), 1)
+
+    def test_kakuyomu(self):
+        self.pages["https://kakuyomu.jp/works/100/episodes/200"] = KAKUYOMU_PAGE
+        path, adjacent = episodes.get_epub("kakuyomu", "100", "200")
+
+        self.assertEqual(adjacent, {"prev": "199", "next": "201"})
+        self.assertIn("<dc:title id=\"title\">作品名</dc:title>", read_epub(path, "src/content.opf"))
+        # キャッシュからも前後の話が返る
+        self.assertEqual(episodes.get_epub("kakuyomu", "100", "200"), (path, adjacent))
+        self.assertEqual(len(self.fetched), 1)
+
+    def test_kakuyomu_with_broken_adjacent_file_is_fetched_again(self):
+        self.pages["https://kakuyomu.jp/works/100/episodes/200"] = KAKUYOMU_PAGE
+        path, _ = episodes.get_epub("kakuyomu", "100", "200")
+        path.with_suffix(".nav.json").write_text("{", encoding="utf-8")
+
+        _, adjacent = episodes.get_epub("kakuyomu", "100", "200")
+        self.assertEqual(adjacent, {"prev": "199", "next": "201"})
+        self.assertEqual(len(self.fetched), 2)
+
+    def test_page_without_text_is_not_cached(self):
+        self.pages["https://ncode.syosetu.com/n1234ab/1/"] = "<html><head><title>エラー</title></head></html>"
+        with self.assertRaises(ValueError):
+            episodes.get_epub("narou", "n1234ab", "1")
+        self.assertEqual(list(self.cache_dir.rglob("*.*")), [])
+
+    def test_http_error_is_passed_on(self):
+        url = "https://ncode.syosetu.com/n1234ab/2/"
+        self.pages[url] = urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        with self.assertRaises(urllib.error.HTTPError):
+            episodes.get_epub("narou", "n1234ab", "2")
+
+
+class KakuyomuTest(CacheTestCase):
+    def test_refresh_adjacent_updates_only_the_adjacent_file(self):
+        url = "https://kakuyomu.jp/works/100/episodes/200"
+        self.pages[url] = KAKUYOMU_PAGE.replace("/episodes/201", "/episodes/none")  # 次の話がまだない
+        path, adjacent = episodes.get_epub("kakuyomu", "100", "200")
+        self.assertEqual(adjacent, {"prev": "199", "next": None})
+        modified = path.stat().st_mtime_ns
+
+        self.pages[url] = KAKUYOMU_PAGE
+        self.assertEqual(episodes.refresh_kakuyomu_adjacent("100", "200"), {"prev": "199", "next": "201"})
+        self.assertEqual(episodes.get_epub("kakuyomu", "100", "200"), (path, {"prev": "199", "next": "201"}))
+        self.assertEqual(path.stat().st_mtime_ns, modified)
+
+    def test_first_episode(self):
+        self.pages["https://kakuyomu.jp/works/100"] = KAKUYOMU_WORK_PAGE
+        self.assertEqual(episodes.first_episode("kakuyomu", "100"), "200")
+        self.assertEqual(episodes.first_episode("narou", "n1234ab"), "1")
+        self.assertEqual(len(self.fetched), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

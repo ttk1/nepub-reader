@@ -1,14 +1,15 @@
 // トップページ。読書履歴の一覧・削除・エクスポート・インポート。
-import { MAX_HISTORY, getHistory, novelKey, removePositions, saveHistory } from './history.js'
+import { getHistory, isPosition, novelKey, saveHistory } from './history.js'
 
 const list = document.getElementById('history-list')
+const message = document.getElementById('history-message')
 const exportButton = document.getElementById('history-export')
-const clearButton = document.getElementById('history-clear-btn')
+const clearButton = document.getElementById('history-clear')
 const importButton = document.getElementById('history-import')
 const importInput = document.getElementById('history-import-file')
 
 const EXTERNAL_ICON =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
 
 /** document.createElement の短縮形。props は要素のプロパティ（className, textContent など） */
 const el = (tag, props, ...children) => {
@@ -17,9 +18,16 @@ const el = (tag, props, ...children) => {
   return element
 }
 
+/** 操作の結果を履歴の上に出す。action は一緒に出すボタン { label, run } */
+function notify(text, action) {
+  message.replaceChildren(...(text ? [text] : []))
+  if (action) message.append(el('button', { type: 'button', className: 'history-action', textContent: action.label, onclick: action.run }))
+}
+
 function formatDate(isoString) {
   const date = new Date(isoString)
   const minutes = Math.floor((Date.now() - date) / 60000)
+  if (Number.isNaN(minutes)) return ''
   if (minutes < 1) return 'たった今'
   if (minutes < 60) return `${minutes}分前`
   if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}時間前`
@@ -27,12 +35,13 @@ function formatDate(isoString) {
   return date.toLocaleDateString('ja-JP')
 }
 
+// 旧形式の履歴に残っているサイト名は表示時に取る
+const displayTitle = (item) => (item.novel_title || `${item.novel_id} - ${item.last_episode}話`).replace(/ - カクヨム$/, '')
+
 function historyItem(item) {
   const site = item.site || 'narou'
+  const siteName = site === 'kakuyomu' ? 'カクヨム' : '小説家になろう'
   const id = encodeURIComponent(item.novel_id)
-
-  // 旧形式の履歴に残っているサイト名サフィックスは表示時に除去する
-  const title = (item.novel_title || `${item.novel_id} - ${item.last_episode}話`).replace(/ - カクヨム$/, '')
   // カクヨムの last_episode はエピソード ID なので話数は出せない
   const meta = [site === 'narou' && `第${item.last_episode}話`, formatDate(item.last_accessed)].filter(Boolean).join('・')
 
@@ -42,7 +51,7 @@ function historyItem(item) {
     el(
       'span',
       { className: 'history-text' },
-      el('span', { className: 'history-title', textContent: title }),
+      el('span', { className: 'history-title', textContent: displayTitle(item) }),
       ...(item.episode_title ? [el('span', { className: 'history-episode', textContent: item.episode_title })] : []),
     ),
     el(
@@ -57,15 +66,18 @@ function historyItem(item) {
     className: 'history-external',
     href: site === 'kakuyomu' ? `https://kakuyomu.jp/works/${id}` : `https://ncode.syosetu.com/${id}/`,
     target: '_blank',
-    rel: 'noopener',
-    title: site === 'kakuyomu' ? 'カクヨムで作品ページを開く' : '小説家になろうで作品ページを開く',
+    rel: 'noopener noreferrer',
+    title: `${siteName}で作品ページを開く`,
+    ariaLabel: `${siteName}で作品ページを開く`,
     innerHTML: EXTERNAL_ICON,
   })
   const deleteButton = el('button', {
+    type: 'button',
     className: 'history-delete',
     textContent: '✕',
     title: 'この履歴を削除',
-    onclick: () => deleteHistoryItem(novelKey(item)),
+    ariaLabel: 'この履歴を削除',
+    onclick: () => deleteHistoryItem(item),
   })
   return el('li', { className: 'history-item' }, link, external, deleteButton)
 }
@@ -81,11 +93,21 @@ function renderHistory() {
   )
 }
 
-// 履歴と一緒に、その作品の読書位置も消す
-function deleteHistoryItem(key) {
-  saveHistory(getHistory().filter((item) => novelKey(item) !== key))
-  removePositions(`${key}:`)
+/** 履歴を保存して表示し直す */
+function updateHistory(history, text, action) {
+  saveHistory(history)
   renderHistory()
+  notify(text, action)
+}
+
+// 押し間違えても戻せるよう、確認は挟まずに「元に戻す」を出す
+function deleteHistoryItem(item) {
+  const key = novelKey(item)
+  updateHistory(
+    getHistory().filter((other) => novelKey(other) !== key),
+    `「${displayTitle(item)}」を履歴から削除しました`,
+    { label: '元に戻す', run: () => updateHistory(mergeHistory(getHistory(), [item]), '') },
+  )
 }
 
 // ---- エクスポート / インポート ----
@@ -109,6 +131,7 @@ function sanitizeItem(item) {
     episode_title: text(item.episode_title, ''),
     last_episode: item.last_episode,
     last_accessed: text(item.last_accessed, ''),
+    position: isPosition(item.position) ? { index: item.position.index, progress: item.position.progress } : undefined,
   }
 }
 
@@ -120,7 +143,7 @@ function mergeHistory(current, imported) {
     const key = novelKey(item)
     if (!latest.has(key) || newer(item, latest.get(key))) latest.set(key, item)
   }
-  return [...latest.values()].sort((a, b) => newer(b, a) - newer(a, b)).slice(0, MAX_HISTORY)
+  return [...latest.values()].sort((a, b) => newer(b, a) - newer(a, b))
 }
 
 async function importHistory(file) {
@@ -132,16 +155,14 @@ async function importHistory(file) {
     if (!Array.isArray(imported)) throw new Error('unsupported format')
     items = imported.map(sanitizeItem).filter(Boolean)
   } catch {
-    alert('履歴ファイルを読み込めませんでした。エクスポートした JSON ファイルを指定してください。')
+    notify('履歴ファイルを読み込めませんでした。エクスポートした JSON ファイルを指定してください。')
     return
   }
   if (items.length === 0) {
-    alert('読み込める履歴がありませんでした')
+    notify('読み込める履歴がありませんでした')
     return
   }
-  saveHistory(mergeHistory(getHistory(), items))
-  renderHistory()
-  alert(`${items.length} 件の履歴を取り込みました`)
+  updateHistory(mergeHistory(getHistory(), items), `${items.length} 件の履歴を取り込みました`)
 }
 
 exportButton.addEventListener('click', exportHistory)
@@ -151,10 +172,7 @@ importInput.addEventListener('change', () => {
   importInput.value = ''
 })
 clearButton.addEventListener('click', () => {
-  if (!confirm('読書履歴をすべて削除しますか？')) return
-  saveHistory([])
-  removePositions()
-  renderHistory()
+  if (confirm('読書履歴をすべて削除しますか？')) updateHistory([], '読書履歴をすべて削除しました')
 })
 
 renderHistory()

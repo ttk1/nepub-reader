@@ -1,0 +1,47 @@
+/* リーダー画面。ツールバーと本文の見た目は epub-viewer が持つので、ここはページの枠と、足した部品だけ */
+
+/* overscroll-behavior: スマートフォンで縦に指を動かしても「引っ張って更新」が働かないように */
+body { margin: 0; overscroll-behavior: none; }
+/* dvh が使えない古いブラウザ向けに vh を併記する */
+#reader { height: 100vh; height: 100dvh; }
+
+.epub-reader .toolbar > button:disabled { opacity: 0.35; cursor: default; background: none; }
+/* 狭い画面では「前の話」「次の話」を「前話」「次話」にして、作品名の場所を空ける */
+@media (max-width: 600px) {
+    .epub-reader .toolbar .wide { display: none; }
+}
+
+/* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */
+#status {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    max-width: calc(100% - 32px);
+    padding: 8px 18px;
+    border: 1px solid rgb(128 128 128 / 0.4);
+    border-radius: 999px;
+    background: rgb(32 32 32 / 0.92);
+    color: #f0f0f0;
+    font: 14px/1.4 system-ui, sans-serif;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+    /* 下にあるページのクリック（ページ送り）を妨げない */
+    pointer-events: none;
+}
+#status:empty { display: none; }
+#status button {
+    padding: 4px 12px;
+    border: 1px solid rgb(255 255 255 / 0.5);
+    border-radius: 999px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+}
+#status button:hover { background: rgb(255 255 255 / 0.15); }

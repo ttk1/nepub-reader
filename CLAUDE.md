@@ -12,29 +12,33 @@
 
 | パス | 内容 |
 | --- | --- |
-| `nepub_reader/app.py` | サーバー。話の取得と EPUB 生成（nepub）、キャッシュ、ルーティング |
-| `nepub_reader/templates/index.html` | トップページの HTML（中身は `static/index.js`） |
-| `nepub_reader/templates/reader.html` | リーダー画面の HTML（中身は `static/reader.js`） |
-| `nepub_reader/static/index.js` | トップページ。URL 入力、読書履歴の一覧・削除・インポート・エクスポート |
-| `nepub_reader/static/reader.js` | リーダー画面。EPUB の取得、話の前後移動、読書履歴の記録 |
-| `nepub_reader/static/history.js` | 読書履歴と読書位置の localStorage 管理（トップページとリーダーで共有） |
+| `nepub_reader/app.py` | サーバー。ルーティングとセキュリティヘッダーだけを持つ |
+| `nepub_reader/episodes.py` | 話の取得と EPUB 生成（nepub）、キャッシュ、元サイトの URL の解釈。Flask には依存しない |
+| `nepub_reader/templates/` | トップページ（`index.html`）とリーダー画面（`reader.html`）の HTML。CSS と JS は `static/` に置く |
+| `nepub_reader/static/index.js` / `index.css` | トップページ。読書履歴の一覧・削除・インポート・エクスポート |
+| `nepub_reader/static/theme.js` | トップページの配色をリーダーのテーマに合わせる（描画前に動かすので通常のスクリプト） |
+| `nepub_reader/static/reader.js` / `reader.css` | リーダー画面。EPUB の取得、話の前後移動、読書履歴と読書位置の記録 |
+| `nepub_reader/static/history.js` | 読書履歴（読書位置を含む）の localStorage 管理（トップページとリーダーで共有） |
 | `nepub_reader/static/epub-viewer/` | 同梱の epub-viewer（ビルド成果物。直接編集しない） |
+| `tests/` | サーバーのテスト（標準ライブラリの `unittest`。元サイトへはアクセスしない） |
 | `epub-cache/` | 生成した EPUB のキャッシュ（git 管理外） |
 
-ルート: `/read/<site>/<作品 ID>/<話>` がリーダー画面、`/epub/<site>/<作品 ID>/<話>` が 1 話分の EPUB、`/api/kakuyomu/next-episode/...` がカクヨムの最新話の再確認。`<話>` はなろうなら話数、カクヨムならエピソード ID。
+ルート: `/read/<site>/<作品 ID>/<話>` がリーダー画面、`/epub/<site>/<作品 ID>/<話>` が 1 話分の EPUB、`/api/kakuyomu/next-episode/...` がカクヨムの最新話の再確認、`/go?url=` が元サイトの URL からリーダー画面への移動。`<話>` はなろうなら話数、カクヨムならエピソード ID。
 
 ## コマンド（必ず Docker 経由。ホストの Python / Node は使わない）
 
 ```sh
 docker build -t nepub-reader .
 docker run --rm -p 127.0.0.1:5000:5000 nepub-reader   # http://localhost:5000/
+# テスト（イメージの Python で、リポジトリのコードを読み取り専用でマウントして実行する）
+MSYS_NO_PATHCONV=1 docker run --rm -v "<リポジトリの絶対パス>:/src:ro" -w /src nepub-reader /app/.venv/bin/python -B -m unittest discover -s tests
 ```
 
 Windows の Git Bash から `docker` にコンテナ内パス（`/work` など）を渡すと Windows パスに自動変換されるので、`MSYS_NO_PATHCONV=1` を前に付けて変換を無効にする。
 
 ## 毎回のチェックリスト（変更を終える前に必ず確認）
 
-1. **動作確認**: Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
+1. **動作確認**: テストを通す。サーバーの挙動を変えたらテストも足す（テスト用の依存は増やさず `unittest` で書く）。画面は Docker で起動し、ブラウザで実際に操作して確認する（手順は「ブラウザでの確認」）。見た目の不具合は computed style では見逃すことがあるので、スクリーンショットや画素で確認する。
 2. **冗長さ・可読性**: 差分を読み返し、使われていないコード・重複・分かりにくい名前がないか確認する。コメントは「なぜ」を書く。構造はシンプルに保つ。
 3. **ドキュメント**: 操作方法や起動方法を変えたら README.md を更新する。このファイルも「このファイルの運用」に従って更新する。Markdown の文は途中で改行しない（日本語では改行が余分な空白として表示されるため）。
 4. **依存を増やさない**: 追加が必要なら「サプライチェーン対策」の手順に従う。
@@ -63,19 +67,23 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - 更新手順: epub-viewer でタグをチェックアウトし、`docker compose run --rm node sh -c "npm ci && npm run build"` → `dist/src/` の中身と `LICENSE` を `nepub_reader/static/epub-viewer/` に上書きコピー（消えたファイルは削除）→ 上の取り込み元のタグ・コミットを更新 → 動作確認。
 - API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・スワイプ・ホイール、リモコンのチャタリング対策）と表示設定（テーマ・フォント・行間・表示幅など）は epub-viewer 側の機能なので、こちらで作り直さない。
 - `reader.js` が使うのは公開 API だけ（`reader.toolbar` と、作品名・話タイトルの表示に使う `.title` 要素も公開 API）。ツールバーのそれ以外の中身には頼らない。
-- 更新時は、前の版が localStorage に保存した設定（`nepub-reader:settings`）と読書位置がそのまま使えるかも確認する。
-- `reader.html` の CSS（`height` の `vh` と `dvh` の併記、`overscroll-behavior: none`）は epub-viewer の README の勧めに従ったもの。
+- 更新時は、前の版が localStorage に保存した設定（`nepub-reader:settings`）がそのまま使えるかも確認する。`theme.js` もこの設定の `theme` を読んでいる。
+- `reader.css` の `height` の `vh` と `dvh` の併記、`overscroll-behavior: none` は epub-viewer の README の勧めに従ったもの。
 
 ## 設計メモ・ハマりどころ
 
 - **話の移動**: リーダー画面はページを遷移せずに次/前の話を読み込み、URL は `history.replaceState` で書き換える（リロードで同じ話が開く）。`bookend` / `bookstart` はキーを押すたびに発生するので、読み込み中は `loading` で無視する。
 - **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は再確認しない（キーを押すたびに元サイトへアクセスしないように）。
-- **読書位置**: EpubReader が `nepub-reader:position:<site>:<作品 ID>:<話>` に保存する。1 話ごとの EPUB は作品名が共通で `dc:identifier` もないので、キーは必ず話ごとに指定する。localStorage が際限なく増えないよう、話を開くと同じ作品の他の話の位置は消す（作品ごとに最新の 1 話分だけ残す）。履歴を削除したときも、その作品の位置を消す。
-- **読書履歴**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。形式（`site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed`）はエクスポートしたファイルとの互換のため変えない。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。
+- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
+- **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
+- **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。
 - **EPUB のメタデータ**: 作品名は `book.metadata.title`、話タイトルは `book.toc[0].label`。
-- **作品名の取り出し**: サーバーはページの `<title>` から話タイトルを除いて作品名を得る。そのために nepub のパーサーの内部属性 `_title`（tcy 加工前の話タイトル）を使っているので、nepub を更新したら作品名が正しく取れるか確認する。
-- **EPUB の中身**: 本文の CSS は nepub 標準の `style()` をそのまま使う。行間などの見た目は epub-viewer の既定と設定に任せ、EPUB 側では上書きしない（キャッシュ済みの EPUB に焼き込まれて後から変えられないため）。
-- **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
+- **作品名の取り出し**: サーバーはページの `<title>` から話タイトルを除いて作品名を得る。そのために nepub のパーサーの内部属性 `_title`（tcy 加工前の話タイトル）を使っているので、nepub を更新したら作品名が正しく取れるか確認する（テストがある）。古い版が作ったキャッシュには、作品名に話タイトルやサイト名が残っているものがある（キャッシュを消せば作り直される）。
+- **EPUB の中身**: 書き出しは nepub の `write_epub` に任せる。本文の CSS は nepub 標準のままで、行間などの見た目は epub-viewer の既定と設定に任せ、EPUB 側では上書きしない（キャッシュ済みの EPUB に焼き込まれて後から変えられないため）。
+- **元サイトへのアクセス**: `episodes.py` のロックで同時に 1 つにする（同じ話の二重取得も防ぐ）。作品 ID・話は `is_valid_episode` を通したものだけを、キャッシュのファイル名と元サイトの URL に使う。
+- **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
+- **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。
+- **トップページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。配色は `index.css` の `:root[data-theme=...]`。
 
 ## ブラウザでの確認
 
@@ -84,4 +92,5 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - アプリのコンテナとテスト用コンテナを同じ Docker ネットワークにつなぎ、コンテナ名でアクセスする。
 - Playwright は epub-viewer の `node_modules` ボリュームを読み取り専用でマウントし、`NODE_PATH` を指定して CommonJS のスクリプトから `require('@playwright/test')` する。確認用スクリプトはリポジトリに入れない。
 - Playwright イメージの既定のフォントでは縦書きの漢字が重なって描画される。スクリーンショットを撮るときは和文フォント（Windows なら `C:/Windows/Fonts/yumin.ttf` など）を読み取り専用で `/usr/share/fonts/` にマウントし、`fc-cache -f` してから撮る。フォントはコミットしない。
-- 元サイトへのアクセスは最小限にする（同じ話はキャッシュが使われる）。最新話などの状態は `page.route()` でレスポンスを差し替えて再現する。
+- 元サイトへのアクセスは最小限にする（同じ話はキャッシュが使われる）。最新話や読み込みの失敗は `page.route()` でレスポンスを差し替えて再現する（差し替えた 404 は、Chromium と WebKit ではコンソールのエラーとして記録される）。
+- スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。
