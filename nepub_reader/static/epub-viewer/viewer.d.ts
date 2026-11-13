@@ -1,70 +1,30 @@
 import { type Book } from './book.ts';
-export interface Theme {
-    background: string;
-    color: string;
-    link: string;
-}
-export declare const themes: {
-    light: {
-        background: string;
-        color: string;
-        link: string;
-    };
-    dark: {
-        background: string;
-        color: string;
-        link: string;
-    };
-    sepia: {
-        background: string;
-        color: string;
-        link: string;
-    };
-};
-/**
- * Font stacks for Japanese text, covering macOS / iOS, Windows, Android and Linux.
- * Meiryo comes after Yu Gothic: its tall line metrics push ruby away from vertical text.
- */
-export declare const fonts: {
-    mincho: string;
-    gothic: string;
-};
-export interface ViewerOptions {
-    theme: Theme;
-    /** CSS font-family that overrides the book's fonts, e.g. `fonts.mincho`. "" keeps the book's fonts. */
-    fontFamily: string;
-    /** Base font size in CSS px. Text sized relatively (em, %) by the book scales with it. */
-    fontSize: number;
-    /** "auto" follows the book's CSS. */
-    writingMode: 'auto' | 'vertical' | 'horizontal';
-    /** Page margin in CSS px. */
-    margin: number;
-    /** Maximum page width in CSS px, centered in the container (0 = full width). Wide lines of text tire the eyes. */
-    maxWidth: number;
-    /** Turn pages with ←/→, ↑/↓, PageUp/PageDown and Space pressed anywhere in the host window. */
-    keyboard: boolean;
-    /** Turn pages with the mouse wheel / trackpad over the viewer: one page per wheel gesture. */
-    wheel: boolean;
-    /**
-     * Page-turn keys, clicks and wheel gestures within this many ms of the previous accepted one are ignored, so that
-     * chattering (e.g. remote controls) does not skip pages. Keep it short so fast deliberate presses still work.
-     */
-    cooldown: number;
-}
-/** A position that survives re-layout (font size / window size changes). */
-export interface Location {
+import { type ViewerOptions } from './options.ts';
+/** A position in a book that survives re-layout (font size / window size changes). */
+export interface BookLocation {
     /** Index into `book.sections`. Negative counts from the end, as in `Array.at()` (-1 = last section). */
     index: number;
-    /** Position within the section, 0 (first page) to 1 (last page). */
+    /**
+     * Position within the section: the share of it that comes before the page. 0 is the first page;
+     * the last page of n is (n - 1) / n when read, and 1 is also taken for it when given.
+     */
     progress: number;
 }
-export interface RelocateDetail extends Location {
+/** Where to go: a BookLocation, a TocItem href, or a position in the whole book (the `fraction` of the relocate event, 0 to 1). */
+export type BookTarget = BookLocation | string | {
+    fraction: number;
+};
+export interface RelocateDetail extends BookLocation {
     /** 0-based page number within the section. */
     page: number;
-    /** Number of pages in the section. */
+    /** Number of pages in the section. A page of a fixed-layout book is a section of its own, of one page. */
     pages: number;
-    /** Estimated progress through the whole book, (0, 1]; 1 on the last page. */
+    /** Estimated progress through the whole book, up to the end of the page: 1 on the last page. `goTo({ fraction })` leads back here. */
     fraction: number;
+    /** Pages progress to the left (vertical text, and books opened from the right such as manga): goLeft() is next(). For the direction of a slider or of buttons. */
+    rtl: boolean;
+    /** The sections on the screen: one, or the two pages of a spread of a fixed-layout book (`index` is the first). */
+    indices: number[];
 }
 export interface EpubViewerEventMap {
     /** The displayed page changed. */
@@ -82,7 +42,15 @@ export interface EpubViewerEventMap {
     link: CustomEvent<{
         href: string;
     }>;
-    /** A page turn by key, click or wheel failed (e.g. a broken section). Calls from code reject instead. */
+    /**
+     * A click or tap on the page that neither follows a link nor turns the page: on the middle of the
+     * page, or anywhere with the `click` option off. `x` is the position across the page(s), from
+     * 0 (left edge) to 1. For showing and hiding controls, or page turns of your own.
+     */
+    tap: CustomEvent<{
+        x: number;
+    }>;
+    /** A page turn by key, click, wheel or swipe, or a link in the book, failed (e.g. a broken section). Calls from code reject instead. */
     error: CustomEvent<{
         error: unknown;
     }>;
@@ -94,24 +62,28 @@ export interface EpubViewer {
     removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void;
 }
 /**
- * Paginated EPUB renderer. Each section is shown in an iframe (scripts disabled) and split into
- * pages with CSS multi-column layout. For vertical text the columns stack downwards, so a page
- * turn is a vertical scroll; for horizontal text it is a horizontal scroll.
+ * Shows a book page by page, in iframes (scripts disabled). The text of a reflowable book is
+ * split into pages (see reflow.ts); the pages of a fixed-layout book are shown as they are, scaled
+ * to fit, one or two at a time (see fixed.ts). User input is handled in input.ts.
+ *
+ * This class keeps what is shown: the frames, the position, and the navigations between them.
  */
 export declare class EpubViewer extends EventTarget {
     #private;
-    book?: Book;
     /** `container` must have a size (e.g. width/height set by CSS); the viewer fills it. */
     constructor(container: HTMLElement, options?: Partial<ViewerOptions>);
+    /** The book being shown. */
+    get book(): Book | undefined;
     get options(): Readonly<ViewerOptions>;
     /** Current position, to be saved and passed to `open()` / `goTo()` later. */
-    get location(): Location | undefined;
-    /** Shows `book` at `location` (a Location or a TocItem href), or at the beginning. */
-    open(book: Book, location?: Location | string): Promise<void>;
-    goTo(target: Location | string): Promise<void>;
+    get location(): BookLocation | undefined;
+    /** Shows `book` at `target`, or at the beginning. The Book shown before is not destroyed. */
+    open(book: Book, target?: BookTarget): Promise<void>;
+    /** Moves to `target`. Does nothing if that is not in the book. */
+    goTo(target: BookTarget): Promise<void>;
     next(): Promise<void>;
     prev(): Promise<void>;
-    /** Page turn towards the left: next page for right-to-left (vertical) books, previous otherwise. */
+    /** Page turn towards the left: the next page for a book read from right to left (vertical text, manga), the previous one otherwise. */
     goLeft(): Promise<void>;
     goRight(): Promise<void>;
     setOptions(options: Partial<ViewerOptions>): void;

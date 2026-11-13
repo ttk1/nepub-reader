@@ -7,6 +7,10 @@ export interface Metadata {
     title: string;
     creator: string;
     language: string;
+    /** "pre-paginated": a fixed-layout book, where every section is one page of a fixed size (e.g. manga). */
+    layout: 'reflowable' | 'pre-paginated';
+    /** The side that pages progress towards: "rtl" for books opened from the right (vertical text, manga). */
+    direction: 'ltr' | 'rtl';
 }
 /** A spine item: one content document, in reading order. */
 export interface Section {
@@ -16,6 +20,8 @@ export interface Section {
     linear: boolean;
     /** Uncompressed size in bytes, used to estimate progress through the whole book. */
     size: number;
+    /** Fixed layout: the side of a two-page spread that the page belongs on, if the book says. */
+    spread?: 'left' | 'right' | 'center';
 }
 export interface TocItem {
     label: string;
@@ -25,7 +31,8 @@ export interface TocItem {
 }
 /**
  * Resolves `href` relative to the archive path `base`.
- * Returns "path#fragment" inside the archive, or undefined for external URLs (http:, mailto:, data:, ...).
+ * Returns "path#fragment" inside the archive, or undefined for external URLs (http:, mailto:, data:, ...)
+ * and malformed ones.
  */
 export declare function resolvePath(href: string, base: string): string | undefined;
 export declare function openBook(source: BookSource): Promise<Book>;
@@ -36,13 +43,18 @@ export declare class Book {
     readonly toc: TocItem[];
     /** Use `openBook()` instead of calling this directly. */
     constructor(zip: ZipReader, types: Map<string, string>, metadata: Metadata, sections: Section[], toc: TocItem[], cover?: string);
-    /** Cover image, if the book declares one. */
+    /**
+     * Cover image, if the book declares one: a bitmap image, or an SVG image (type "image/svg+xml",
+     * which can hold scripts: see the README before giving it a blob: URL).
+     */
     loadCover(): Promise<Blob | undefined>;
     /**
-     * Returns a blob: URL for a file in the archive. HTML and CSS are rewritten so that
+     * Returns a URL (blob:) for a file in the archive, to use it as an image, a style sheet or a font. HTML and CSS are rewritten so that
      * their references (images, stylesheets, fonts) also point to blob: URLs.
+     *
+     * Files that can hold scripts (e.g. SVG images) get a data: URL instead: see #createUrl.
      */
     getUrl(path: string): Promise<string>;
-    /** Revokes all blob: URLs created by this book. */
+    /** Revokes all blob: URLs created by this book, and those that are still being made. No more can be had after this. */
     destroy(): void;
 }

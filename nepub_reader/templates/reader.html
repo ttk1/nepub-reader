@@ -6,8 +6,10 @@
     <title>nepub-reader</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
     <style>
-        body { margin: 0; }
-        #reader { height: 100dvh; }
+        /* overscroll-behavior: スマートフォンで縦に指を動かしても「引っ張って更新」が働かないように */
+        body { margin: 0; overscroll-behavior: none; }
+        /* dvh が使えない古いブラウザ向けに vh を併記する */
+        #reader { height: 100vh; height: 100dvh; }
     </style>
     <script type="module" src="/static/reader.js"></script>
 </head>

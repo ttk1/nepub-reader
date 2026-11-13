@@ -59,10 +59,12 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ## 同梱の epub-viewer
 
-- 取り込み元: https://github.com/ttk1/epub-viewer の `v1.1.1`（コミット `628d61b`）。npm には公開されていないので、ビルド成果物を同梱している。
+- 取り込み元: https://github.com/ttk1/epub-viewer の `v2.0.0`（コミット `6d15332`。リリース前の確認として取り込んだもので、公開時にタグが別のコミットに付いたら、そのコミットで取り込み直してここを更新する）。npm には公開されていないので、ビルド成果物を同梱している。
 - 更新手順: epub-viewer でタグをチェックアウトし、`docker compose run --rm node sh -c "npm ci && npm run build"` → `dist/src/` の中身と `LICENSE` を `nepub_reader/static/epub-viewer/` に上書きコピー（消えたファイルは削除）→ 上の取り込み元のタグ・コミットを更新 → 動作確認。
-- API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・リモコンのチャタリング対策）とテーマ・フォント・表示幅は epub-viewer 側の機能なので、こちらで作り直さない。
-- `reader.js` は公開 API のほか、ツールバーの `.title` 要素（作品名・話タイトルの表示に使う）に依存している。更新時は壊れていないか確認する。
+- API と挙動は epub-viewer の README.md を参照。ページ送り（キー・クリック・スワイプ・ホイール、リモコンのチャタリング対策）と表示設定（テーマ・フォント・行間・表示幅など）は epub-viewer 側の機能なので、こちらで作り直さない。
+- `reader.js` が使うのは公開 API だけ（`reader.toolbar` と、作品名・話タイトルの表示に使う `.title` 要素も公開 API）。ツールバーのそれ以外の中身には頼らない。
+- 更新時は、前の版が localStorage に保存した設定（`nepub-reader:settings`）と読書位置がそのまま使えるかも確認する。
+- `reader.html` の CSS（`height` の `vh` と `dvh` の併記、`overscroll-behavior: none`）は epub-viewer の README の勧めに従ったもの。
 
 ## 設計メモ・ハマりどころ
 
