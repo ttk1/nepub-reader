@@ -71,7 +71,7 @@ export function mergeHistory(current, imported) {
     const key = novelKey(item)
     if (!latest.has(key) || newer(item, latest.get(key))) latest.set(key, item)
   }
-  return [...latest.values()].sort((a, b) => newer(b, a) - newer(a, b))
+  return [...latest.values()].sort((a, b) => (newer(a, b) ? -1 : newer(b, a) ? 1 : 0))
 }
 
 // 以前の版は、読書位置を EpubReader に保存させていた（`nepub-reader:position:<site>:<作品 ID>:<話>`）。

@@ -23,7 +23,7 @@ KAKUYOMU_PAGE = """<html><head><title>第1話 旅立ち - 作品名（作者名�
 <a href="/works/100/episodes/201" class="x" id="contentMain-readNextEpisode">次</a>
 </body></html>"""
 
-KAKUYOMU_WORK_PAGE = """<html><body><script id="__NEXT_DATA__" type="application/json">%s</script></body></html>""" % json.dumps(
+KAKUYOMU_WORK_DATA = json.dumps(
     {
         "query": {"workId": "100"},
         "props": {
@@ -43,6 +43,7 @@ KAKUYOMU_WORK_PAGE = """<html><body><script id="__NEXT_DATA__" type="application
         },
     }
 )
+KAKUYOMU_WORK_PAGE = f'<html><body><script id="__NEXT_DATA__" type="application/json">{KAKUYOMU_WORK_DATA}</script></body></html>'
 
 
 class ParseUrlTest(unittest.TestCase):

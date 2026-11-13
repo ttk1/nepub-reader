@@ -26,7 +26,7 @@ function notify(text, action) {
 
 function formatDate(isoString) {
   const date = new Date(isoString)
-  const minutes = Math.floor((Date.now() - date) / 60000)
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000)
   if (Number.isNaN(minutes)) return ''
   if (minutes < 1) return 'たった今'
   if (minutes < 60) return `${minutes}分前`
