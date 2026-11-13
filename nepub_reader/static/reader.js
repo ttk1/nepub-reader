@@ -45,6 +45,9 @@ const reader = new EpubReader(document.getElementById('reader'), { storage: sett
 const { toolbar, viewer } = reader
 /** @type {HTMLElement} */
 const title = toolbar.querySelector('.title')
+// 作品名と話タイトルを、このページの見出しとして伝える（読み上げソフトで見出しへ移動できるように）
+title.setAttribute('role', 'heading')
+title.setAttribute('aria-level', '1')
 
 // 「前の話」「次の話」。狭い画面では「の」を隠して短くする（reader.css）
 const episodeButton = (word, key, forward) =>
