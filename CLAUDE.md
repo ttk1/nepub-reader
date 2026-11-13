@@ -81,47 +81,73 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 
 ## 設計メモ・ハマりどころ
 
+### 方針
+
+- **epub-viewer の不具合は epub-viewer で直す**: 同梱の epub-viewer の不具合を見つけたら、こちらに回避策を入れずに、再現条件と原因をまとめて報告する（ユーザーの方針）。
+
+### 話の取得と EPUB（サーバー）
+
+- **元サイトへのアクセス**: `episodes.py` のロックで同時に 1 つにし（同じ話の二重取得も防ぐ）、ページの取得は `FETCH_INTERVAL`（1 秒）空ける。リーダーの N / P キーは押しっぱなしでは働かせない。話を次々に飛ばしても、元サイトに負荷をかけないため。作品 ID・話は `is_valid_episode` を通したものだけを、キャッシュのファイル名と元サイトの URL に使う。
+- **作品名の取り出し**: サーバーはページの `<title>` から話タイトルを除いて作品名を得る。そのために nepub のパーサーの内部属性 `_title`（tcy 加工前の話タイトル）を使っているので、nepub を更新したら作品名が正しく取れるか確認する（テストがある）。これができていなかった頃のキャッシュを使わないよう、キャッシュの版を `v2` にした。
+- **EPUB の中身**: 書き出しは nepub の `write_epub` に任せる。本文の CSS は nepub 標準のままで、行間などの見た目は epub-viewer の既定と設定に任せ、EPUB 側では上書きしない（キャッシュ済みの EPUB に焼き込まれて後から変えられないため）。表示のしかたをこのアプリの都合で変えたいときは、`reader.js` の `PAGE_STYLE`（`sectionload` で各ページに足すスタイル）に書く。いまあるのは、高さの低い画面で話タイトルの上下の余白を縮める指定だけ。
+- **EPUB のメタデータ**: 作品名は `book.metadata.title`、話タイトルは `book.toc[0].label`。
+- **なろうの短編**: 話に分かれていない作品で、話のページがなく（1 話の URL は 404）、作品ページに本文がある。作品ページは話のページと同じ作りなので、1 話が 404 のときに作品ページを話として読み、本文があれば 1 話として扱う（`_fetch_narou_short_story`。連載の作品ページには本文がない）。短編だと分かるよう、前後の話がないことを `.nav.json` に保存してヘッダーで返す（リーダーは、なろうでこのヘッダーがあれば短編として扱い、次の話を探さず、元ページのリンクを作品ページにする）。
+- **挿絵が取れない話**: なろうの挿絵は nepub のパーサーが取得する。取得に失敗する（削除された画像、想定しない URL）と例外になるので、そのときは挿絵なしで作り直す（`_parse_episode`）。挿絵の 404 を話の 404 として外へ出すと、リーダーが「最新話です」と誤って知らせる。
+- **キャッシュ**: `episodes.py` の `CACHE_VERSION` のフォルダに保存する。EPUB の作り方を変えて前のキャッシュを使わせたくないときは版を上げる（前の版のフォルダは起動時に `remove_old_caches` が消す）。合計が `MAX_CACHE_BYTES` を超えたら、更新時刻の古い話から消す（読むたびに更新時刻を新しくしている）。EPUB として読めないキャッシュ（途中で切れたファイルなど）は、ないものとして作り直す。キャッシュの手入れ（古い版の削除、上限の整理、更新時刻の変更）は、失敗しても話を返すのを妨げない。
+
+### リーダー画面
+
 - **話の移動**: リーダー画面はページを遷移せずに次/前の話を読み込み、URL は `history.replaceState` で書き換える（リロードで同じ話が開く）。`bookend` / `bookstart` はキーを押すたびに発生するので、読み込み中は `loading` で無視する。
 - **次の話の有無**: なろうは話数 +1 を開いてみて 404 なら最新話。カクヨムは前後の話の ID を `/epub/kakuyomu/...` のレスポンスヘッダー（`X-Prev-Episode` / `X-Next-Episode`）で返し、次話がないときだけ `/api/kakuyomu/next-episode/...` で 1 回再確認する（キャッシュ作成後に次話が公開された場合のため）。前後の ID は EPUB とは別の `.nav.json` に保存しているので、再確認で更新するのはそれだけ（本文の EPUB は作り直さない）。最新話と分かったら、その話を開いている間は自動では再確認しない（キーを押すたびに元サイトへアクセスしないように）。知らせの「再確認」ボタンを押したときだけ確かめ直す。再確認そのものが失敗したとき（元サイトの不調など）も同じで、自動では繰り返さず、ボタンでやり直す。
-- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。履歴は読むたびに検証し、使えない項目を除く（`getHistory` → `sanitizeHistoryItem`。壊れた項目が 1 つあるだけで、一覧や記録が止まらないように）。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
-- **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
-- **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
-- **epub-viewer の不具合は epub-viewer で直す**: 同梱の epub-viewer の不具合を見つけたら、こちらに回避策を入れずに、再現条件と原因をまとめて報告する（ユーザーの方針）。
 - **知らせ（読み込み中・最新話・エラー）**: ツールバーではなく画面下の `#status` に出す（ツールバーはページ中央のタップで隠せるので）。ページをめくると消すが、ツールバーの出し入れでも `relocate` が発生するので、その分は `relayout` で見分けて消さない。
 - **文字サイズの初期値**: EpubReader の既定（45px）は離れて読む大きな画面向けなので、狭い画面（幅か高さが 600px 以下。横向きのスマートフォンを含む）では `settings` オプションで 24px を初期値にしている。利用者が変えた後は、保存された値が使われる。
 - **キー操作**: ページ送りのキーは epub-viewer が受ける。こちらが足したのは N（次の話）と P（前の話）だけ。本文をクリックした後はキーが本文の文書に届くので、`sectionload` で渡される文書にもリスナーを付けている。
-- **トップページの一覧の更新**: ブラウザの「戻る」で戻ったとき（`pageshow` の `persisted`）と、ほかのタブで履歴が変わったとき（`storage`）に描き直す。
 - **ツールバーを隠した状態**: localStorage `nepub-reader:toolbar` に覚える。
-- **EPUB のメタデータ**: 作品名は `book.metadata.title`、話タイトルは `book.toc[0].label`。
-- **作品名の取り出し**: サーバーはページの `<title>` から話タイトルを除いて作品名を得る。そのために nepub のパーサーの内部属性 `_title`（tcy 加工前の話タイトル）を使っているので、nepub を更新したら作品名が正しく取れるか確認する（テストがある）。これができていなかった頃のキャッシュを使わないよう、キャッシュの版を `v2` にした。
-- **EPUB の中身**: 書き出しは nepub の `write_epub` に任せる。本文の CSS は nepub 標準のままで、行間などの見た目は epub-viewer の既定と設定に任せ、EPUB 側では上書きしない（キャッシュ済みの EPUB に焼き込まれて後から変えられないため）。表示のしかたをこのアプリの都合で変えたいときは、`reader.js` の `PAGE_STYLE`（`sectionload` で各ページに足すスタイル）に書く。いまあるのは、高さの低い画面で話タイトルの上下の余白を縮める指定だけ。
-- **キャッシュ**: `episodes.py` の `CACHE_VERSION` のフォルダに保存する。EPUB の作り方を変えて前のキャッシュを使わせたくないときは版を上げる（前の版のフォルダは起動時に `remove_old_caches` が消す）。合計が `MAX_CACHE_BYTES` を超えたら、更新時刻の古い話から消す（読むたびに更新時刻を新しくしている）。EPUB として読めないキャッシュ（途中で切れたファイルなど）は、ないものとして作り直す。キャッシュの手入れ（古い版の削除、上限の整理、更新時刻の変更）は、失敗しても話を返すのを妨げない。
-- **なろうの短編**: 話に分かれていない作品で、話のページがなく（1 話の URL は 404）、作品ページに本文がある。作品ページは話のページと同じ作りなので、1 話が 404 のときに作品ページを話として読み、本文があれば 1 話として扱う（`_fetch_narou_short_story`。連載の作品ページには本文がない）。短編だと分かるよう、前後の話がないことを `.nav.json` に保存してヘッダーで返す（リーダーは、なろうでこのヘッダーがあれば短編として扱い、次の話を探さず、元ページのリンクを作品ページにする）。
-- **挿絵が取れない話**: なろうの挿絵は nepub のパーサーが取得する。取得に失敗する（削除された画像、想定しない URL）と例外になるので、そのときは挿絵なしで作り直す（`_parse_episode`）。挿絵の 404 を話の 404 として外へ出すと、リーダーが「最新話です」と誤って知らせる。
-- **元サイトへのアクセス**: `episodes.py` のロックで同時に 1 つにし（同じ話の二重取得も防ぐ）、ページの取得は `FETCH_INTERVAL`（1 秒）空ける。リーダーの N / P キーは押しっぱなしでは働かせない。話を次々に飛ばしても、元サイトに負荷をかけないため。作品 ID・話は `is_valid_episode` を通したものだけを、キャッシュのファイル名と元サイトの URL に使う。
+- **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 600ms になる。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す（足し忘れると約 700ms に戻る）。ブラウザは同じサーバーに同時に 6 本までしか接続しないので、HTML の後に読み込むファイル（CSS・JS）の数が 6 の倍数をまたぐと、往復が 1 回増える（12 個までなら約 500ms、いまは 14 個で約 600ms）。この境目に合わせるための細工（CSS の埋め込みなど）はしていない。読み込みまわりを変えたら、遅延を入れて測り直す（Chromium なら CDP の `Network.emulateNetworkConditions`）。
+
+### 読書履歴とトップページ
+
+- **読書履歴と読書位置**: localStorage `nepub_reading_history` に作品ごとの最新の話を最大 50 件保存する。項目は `site` / `novel_id` / `novel_title` / `episode_title` / `last_episode` / `last_accessed` / `position`。エクスポートしたファイルとの互換のため、既存の項目の名前と意味は変えない（足すのはよい）。`last_episode` はなろうなら話数（数値）、カクヨムならエピソード ID（文字列）。`site` がない古い履歴はなろうとして扱う。履歴は読むたびに検証し、使えない項目を除く（`getHistory` → `sanitizeHistoryItem`。壊れた項目が 1 つあるだけで、一覧や記録が止まらないように）。`position` はその話の読書位置（EpubViewer の `location`）で、ない履歴もある。
+- **読書位置を EpubReader に保存させない**: 位置は作品ごとに最新の 1 話分だけあればよく、履歴と一緒に消したり移したりしたいので、履歴の項目に持たせている。EpubReader には `storage` オプションで設定（`nepub-reader:settings`）だけを保存させ、位置は `open()` の `location` で渡して `relocate` で保存する。以前の版が保存した `nepub-reader:position:*` は、`history.js` が読み込み時に履歴へ移して消す。
+- **履歴のデータ処理は `history.js` に置く**: 保存・検証・統合など、画面に触らない処理は `history.js` に書いてテストする。`index.js` と `reader.js` は読み込むと画面を操作するので、Node.js のテストからは読み込めない。
+- **トップページの一覧の更新**: ブラウザの「戻る」で戻ったとき（`pageshow` の `persisted`）と、ほかのタブで履歴が変わったとき（`storage`）に描き直す。
+- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
+- **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
+
+### セキュリティと配布
+
 - **CSP**: `app.py` の `CONTENT_SECURITY_POLICY` で全レスポンスに付ける。インラインスクリプトは禁止なので、JS は `static/` のファイルに書く。epub-viewer が書籍を blob: URL で表示するため `frame-src blob:` などを許可している（必要な指定は epub-viewer の README の「セキュリティ」）。`frame-ancestors` を `'none'` にすると、WebKit では本文の blob: のフレームにも引き継がれて本文が表示されなくなる（`'self'` にしている）。変更したら 3 ブラウザで CSP 違反が出ないか確認する。
 - **ほかのサイトからのリクエスト**: `/epub/` と `/api/` は元サイトへのアクセスを起こすので、`Sec-Fetch-Site` が `cross-site` / `same-site` のリクエストを断る（ほかのサイトのページに、このサーバーを踏み台にさせない）。`/go`（カクヨムの作品ページを取得することがある）は、ほかのサイトからはページとして開く場合（`Sec-Fetch-Dest: document`）だけ通す。
-- **モジュールの先読み**: リーダー画面の HTML に、使う JS のモジュールを `<link rel="modulepreload">` で並べている（`app.py` の `READER_MODULES`。同梱の epub-viewer のファイルから自動で作る）。モジュールが次のモジュールを呼ぶたびに通信の往復が増えるのを避けるためで、遅延 100ms の通信で、最初のページが出るまでの時間が約 700ms から約 600ms になる。`reader.js` が読み込むファイルを増やしたら、`READER_MODULES` にも足す（足し忘れると約 700ms に戻る）。ブラウザは同じサーバーに同時に 6 本までしか接続しないので、HTML の後に読み込むファイル（CSS・JS）の数が 6 の倍数をまたぐと、往復が 1 回増える（12 個までなら約 500ms、いまは 14 個で約 600ms）。この境目に合わせるための細工（CSS の埋め込みなど）はしていない。読み込みまわりを変えたら、遅延を入れて測り直す（Chromium なら CDP の `Network.emulateNetworkConditions`）。
-- **アイコンの書き出し**: `icon.svg` を変えたら PNG を作り直す。Playwright イメージのブラウザで、SVG を 192・512・180px のページに表示してスクリーンショットを撮る（`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`）。画像を作る道具はホストに入れない。
 - **待ち受けるアドレス**: 既定は 127.0.0.1（この PC だけ）。Docker のイメージは `HOST=0.0.0.0` を指定していて、公開する範囲は `docker run -p` で決める。
 - **Docker のビルドコンテキスト**: `.dockerignore` は、Dockerfile が COPY するものだけを通す書き方にしている。COPY するものを増やしたら `.dockerignore` にも足す。
-- **ページのテーマ**: `theme.js` が EpubReader の設定（`nepub-reader:settings` の `theme`）を読んで `<html data-theme>` を決める。トップページの配色は `index.css` の `:root[data-theme=...]`。リーダー画面では、EpubReader の準備ができるまでの背景色に使う（`reader.css`。ダークやセピアで、開いた直後に白く光らないように）。色は epub-viewer の `themes` と同じ値を書いているので、epub-viewer の更新で変わっていないか確かめる。`theme.js` は端末の上部の帯の色（`<meta name="theme-color">`）もページの背景に合わせる。リーダーでテーマを変えたときは、設定の保存のところ（`reader.js` の `settingsStorage`）から `nepub-reader:settings` イベントを出し、`theme.js` がそれを受けて合わせ直す。
 
 ## ブラウザでの確認
 
 epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同じ digest）を使う。ホストには何も入れない。
 
+
+### 環境
+
 - アプリのコンテナとテスト用コンテナを同じ Docker ネットワークにつなぎ、コンテナ名でアクセスする。
 - Playwright は epub-viewer の `node_modules` ボリュームを読み取り専用でマウントし、`NODE_PATH` を指定して CommonJS のスクリプトから `require('@playwright/test')` する。確認用スクリプトはリポジトリに入れない。
-- Playwright イメージの既定のフォントでは縦書きの漢字が重なって描画される。スクリーンショットを撮るときは和文フォント（Windows なら `C:/Windows/Fonts/yumin.ttf` など）を読み取り専用で `/usr/share/fonts/` にマウントし、`fc-cache -f` してから撮る。フォントはコミットしない。
-- スワイプは、Chromium なら CDP の `Input.dispatchTouchEvent`（`touchStart` → `touchMove` を数回 → `touchEnd`）で再現できる。Firefox と WebKit は、本文の iframe の文書に `TouchEvent` を合成して送る（Linux の WebKit は `Touch` を作れないので、`touches` などを持たせた `Event` で代える）。
-- `page.route()` でページ自体（`/read/...`）のレスポンスを差し替えると、Chromium では続く静的ファイルの読み込みが止められることがある。
 - 元サイトへのアクセスは最小限にする（同じ話はキャッシュが使われる）。最新話や読み込みの失敗は `page.route()` でレスポンスを差し替えて再現する（差し替えた 404 は、Chromium と WebKit ではコンソールのエラーとして記録される）。
-- Playwright の `click()` は、クリックで始まった画面遷移が終わるまで戻らない。遷移の途中の状態（送信中のボタンなど）は、ページの中で記録しておいて後から読む。
+
+### 見た目
+
+- Playwright イメージの既定のフォントでは縦書きの漢字が重なって描画される。スクリーンショットを撮るときは和文フォント（Windows なら `C:/Windows/Fonts/yumin.ttf` など）を読み取り専用で `/usr/share/fonts/` にマウントし、`fc-cache -f` してから撮る。フォントはコミットしない。
 - 画面の大きさは、Playwright の `devices`（`iPhone 15`、`iPhone 15 landscape`、`Pixel 7`、`iPad (gen 7)` など）とテレビ相当（1920×1080）でも確かめる。横向きのスマートフォンは幅が 600px を超えるので、幅だけで判定している処理が漏れやすい。
-- 挿絵のある話は、元サイトにアクセスせずに確かめられる: コンテナの中で `episodes._write_episode_epub` に、`images`（PNG のバイト列を持つ）と `<img src="../image/<名前>"/>` の段落を持つ偽のパーサーを渡して EPUB を作り、キャッシュに置いて開く。
-- WebKit は、`try` で捕まえたフレームへのアクセス違反（`Blocked a frame at ...`）もコンソールにエラーとして記録する。`pageerror` に出ても、捕まえ損ねた例外とは限らない（スタックで場所を確かめる）。
-- 壊れた保存データ（`nepub_reading_history` に `null` や型の違う値、`nepub-reader:settings` に壊れた JSON）と、localStorage が使えない環境（`addInitScript` で `localStorage` の取得を例外にする）でも、トップページとリーダーが動くか確かめる。
-- 配色を変えたら、文字のコントラストを 3 つのテーマで計算して確かめる（`getComputedStyle` の色と `opacity` を、親までさかのぼって背景に重ねてから比べる）。文字は 4.5:1 以上、アイコンは 3:1 以上。`opacity` で薄くすると、色の指定だけ見ていても気付かない。
-- 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、履歴が 50 件で長いタイトルのとき。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。
+- 見た目は、ふだん通らない状態でも確かめる: 長いエラーの知らせ（`page.route()` で `/epub/` に EPUB でないものを返す）、履歴が空のとき、履歴が 50 件で長いタイトルのとき。
+- 配色を変えたら、文字のコントラストを 3 つのテーマで計算して確かめる（`getComputedStyle` の色と `opacity` を、親までさかのぼって背景に重ねてから比べる）。文字は 4.5:1 以上、アイコンは 3:1 以上。`opacity` で薄くすると、色の指定だけ見ていても気付かない。
+
+### 操作と状態の再現
+
+- スワイプは、Chromium なら CDP の `Input.dispatchTouchEvent`（`touchStart` → `touchMove` を数回 → `touchEnd`）で再現できる。Firefox と WebKit は、本文の iframe の文書に `TouchEvent` を合成して送る（Linux の WebKit は `Touch` を作れないので、`touches` などを持たせた `Event` で代える）。
+- 挿絵のある話は、元サイトにアクセスせずに確かめられる: コンテナの中で `episodes._write_episode_epub` に、`images`（PNG のバイト列を持つ）と `<img src="../image/<名前>"/>` の段落を持つ偽のパーサーを渡して EPUB を作り、キャッシュに置いて開く。
+- 壊れた保存データ（`nepub_reading_history` に `null` や型の違う値、`nepub-reader:settings` に壊れた JSON）と、localStorage が使えない環境（`addInitScript` で `localStorage` の取得を例外にする）でも、トップページとリーダーが動くか確かめる。
+
+### Playwright とブラウザの癖
+
+- `page.route()` でページ自体（`/read/...`）のレスポンスを差し替えると、Chromium では続く静的ファイルの読み込みが止められることがある。
+- Playwright の `click()` は、クリックで始まった画面遷移が終わるまで戻らない。遷移の途中の状態（送信中のボタンなど）は、ページの中で記録しておいて後から読む。
+- WebKit は、`try` で捕まえたフレームへのアクセス違反（`Blocked a frame at ...`）もコンソールにエラーとして記録する。`pageerror` に出ても、捕まえ損ねた例外とは限らない（スタックで場所を確かめる）。
