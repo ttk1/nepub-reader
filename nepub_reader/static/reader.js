@@ -11,10 +11,17 @@ const [, site, novelId, firstEpisode] = location.pathname.split('/').slice(1)
 const START = { index: 0, progress: 0 }
 const END = { index: -1, progress: 1 }
 
-// nepub は話タイトルを大きな文字にし、上下に 2 文字分ずつ余白を取る。高さの低い画面（横向きのスマートフォンなど）では
-// 余白だけでページが埋まり、1 行に 1 文字しか入らなくなるので、そのときだけ文字と余白を小さくする。
+// 本文の表示のしかたを、このアプリの都合で変えるところ。
 // EPUB には書き込まず表示のときに足すので、キャッシュ済みの話にも効き、後から変えられる
-const PAGE_STYLE = '@media (max-height: 500px) { h1 { margin-top: 0.5em; margin-bottom: 0.5em; font-size: 1.4em; } }'
+const PAGE_STYLE = [
+  // nepub は話タイトルを大きな文字にし、上下に 2 文字分ずつ余白を取る。高さの低い画面（横向きのスマートフォンなど）では
+  // 余白だけでページが埋まり、1 行に 1 文字しか入らなくなるので、そのときだけ文字と余白を小さくする
+  '@media (max-height: 500px) { h1 { margin-top: 0.5em; margin-bottom: 0.5em; font-size: 1.4em; } }',
+  // 折り返した行は、字間をわずかに広げて行末まで届かせる（本の組版の行頭行末揃え）。
+  // 1 行に入る文字数は整数なので、揃えないと、行の長さを文字の大きさで割った余り（最大でほぼ 1 文字分）が行末に溜まる。
+  // 縦書きではそれがページの下の余白に見え、ツールバーの出し入れなどで行の長さが変わるたびに、余白が増減して見える
+  'p { text-align: justify; }',
+].join('\n')
 
 const el = (tag, props, ...children) => {
   const element = Object.assign(document.createElement(tag), props)
