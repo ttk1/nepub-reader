@@ -31,7 +31,7 @@ const title = toolbar.querySelector('.title')
 
 // 「前の話」「次の話」。狭い画面では「の」を隠して短くする（reader.css）
 const episodeButton = (word, forward) =>
-  el('button', { type: 'button', onclick: () => turn(forward) }, word, el('span', { className: 'wide', textContent: 'の' }), '話')
+  el('button', { type: 'button', title: `${word}の話（${forward ? 'N' : 'P'} キー）`, onclick: () => turn(forward) }, word, el('span', { className: 'wide', textContent: 'の' }), '話')
 const prevButton = episodeButton('前', false)
 const nextButton = episodeButton('次', true)
 toolbar.prepend(el('a', { href: '/', textContent: 'トップ' }), prevButton, nextButton)
@@ -173,6 +173,16 @@ viewer.addEventListener('tap', () => {
     localStorage.setItem(TOOLBAR_KEY, toolbar.hidden ? 'hidden' : 'shown')
   } catch {}
 })
+
+// N で次の話、P で前の話。本文をクリックした後はキーが本文の文書に届くので、そちらでも受ける
+function onKey(e) {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
+  const key = e.key.toLowerCase()
+  if (key === 'n') turn(true)
+  else if (key === 'p') turn(false)
+}
+addEventListener('keydown', onKey)
+viewer.addEventListener('sectionload', (e) => e.detail.doc.defaultView.addEventListener('keydown', onKey))
 
 viewer.addEventListener('bookend', () => turn(true))
 viewer.addEventListener('bookstart', () => turn(false))

@@ -55,6 +55,8 @@ def set_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+    # 個人で使うためのもので、公開する場所に置かれても検索エンジンには載せない
+    response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
     # 元サイトへのリンクを開くときに、読んでいる作品の URL を渡さない
     response.headers.setdefault("Referrer-Policy", "same-origin")
     return response

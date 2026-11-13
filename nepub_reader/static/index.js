@@ -150,3 +150,7 @@ clearButton.addEventListener('click', () => {
 })
 
 renderHistory()
+// ブラウザの「戻る」でリーダーから戻ったとき（ページが前の表示のまま復元される）と、
+// ほかのタブで読み進めたときにも、一覧を新しくする
+addEventListener('pageshow', (e) => e.persisted && renderHistory())
+addEventListener('storage', renderHistory)

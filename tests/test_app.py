@@ -34,6 +34,7 @@ class PagesTest(AppTestCase):
         self.assertEqual(res.headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(res.headers["X-Frame-Options"], "DENY")
         self.assertEqual(res.headers["Referrer-Policy"], "same-origin")
+        self.assertEqual(res.headers["X-Robots-Tag"], "noindex, nofollow")
 
     def test_reader(self):
         self.assertEqual(self.client.get("/read/narou/n1234ab/1").status_code, 200)
