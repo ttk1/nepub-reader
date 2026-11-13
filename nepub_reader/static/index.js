@@ -19,10 +19,16 @@ const el = (tag, props, ...children) => {
   return element
 }
 
-/** 操作の結果を履歴の上に出す。action は一緒に出すボタン { label, run } */
+// 知らせを出しておく時間。「元に戻す」を押すのに十分で、いつまでも残らない長さ
+const MESSAGE_MS = 12000
+let messageTimer
+
+/** 操作の結果を履歴の上に出す（しばらくすると消える）。action は一緒に出すボタン { label, run } */
 function notify(text, action) {
+  clearTimeout(messageTimer)
   message.replaceChildren(...(text ? [text] : []))
   if (action) message.append(el('button', { type: 'button', className: 'history-action', textContent: action.label, onclick: action.run }))
+  if (text) messageTimer = setTimeout(() => message.replaceChildren(), MESSAGE_MS)
 }
 
 function formatDate(isoString) {
