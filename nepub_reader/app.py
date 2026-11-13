@@ -125,16 +125,16 @@ def episode_epub(site: str, novel_id: str, episode: str):
         path, adjacent = episodes.get_epub(site, novel_id, episode)
     # HTTPError は OSError のサブクラスなので先に捕まえる
     except urllib.error.HTTPError as e:
-        logging.error(f"エピソード取得エラー: {target}, status={e.code}")
+        logging.error(f"話の取得エラー: {target}, status={e.code}")
         if e.code == 404:
             if site == "narou" and episode == "1":
                 # 作品ページの URL から開いた場合など。短編は話のページがないので、ここに来る
                 return "1 話が見つかりませんでした（短編には対応していません）", 404
-            return "エピソードが見つかりませんでした", 404
-        return "エピソードの取得に失敗しました", 502
+            return "話が見つかりませんでした", 404
+        return "話の取得に失敗しました", 502
     except OSError as e:
-        logging.error(f"エピソード取得エラー: {target}, error={e}")
-        return "エピソードの取得に失敗しました", 502
+        logging.error(f"話の取得エラー: {target}, error={e}")
+        return "話の取得に失敗しました", 502
     except Exception:
         logging.exception(f"EPUB 生成エラー: {target}")
         return "EPUB の生成に失敗しました", 500
