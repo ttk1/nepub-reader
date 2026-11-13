@@ -46,6 +46,11 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
     pointer-events: none;
 }
 #status:empty { display: none; }
+/* 現れるときに少しだけ動かす（動きを減らす設定の端末では動かさない） */
+@keyframes status-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: no-preference) {
+    #status { animation: status-in 0.15s ease-out; }
+}
 #status button {
     padding: 4px 12px;
     border: 1px solid rgb(255 255 255 / 0.5);
