@@ -61,6 +61,18 @@ class PagesTest(AppTestCase):
         res = self.client.get("/static/nothing.js", headers={"Accept": "*/*"})
         self.assertEqual((res.status_code, res.get_data(as_text=True)), (404, "見つかりません"))
 
+    def test_pages_have_no_inline_scripts(self):
+        # CSP（script-src 'self'）で、インラインのスクリプトとイベント属性は動かない。書いても黙って無視されるので、ここで気付けるようにする
+        for page in ["/", "/read/narou/n1234ab/1", "/go?url=x"]:
+            body = self.client.get(page).get_data(as_text=True)
+            scripts = re.findall(r"<script\b([^>]*)>(.*?)</script>", body, re.S)
+            self.assertTrue(scripts, page)
+            for attributes, content in scripts:
+                self.assertRegex(attributes, r'\bsrc="/static/[\w./-]+"', page)
+                self.assertEqual(content.strip(), "", page)
+            self.assertNotRegex(body, r"<[^>]+\son\w+\s*=", page)
+            self.assertNotIn("javascript:", body, page)
+
     def test_reader(self):
         self.assertEqual(self.client.get("/read/narou/n1234ab/1").status_code, 200)
         self.assertEqual(self.client.get("/read/kakuyomu/100/200").status_code, 200)

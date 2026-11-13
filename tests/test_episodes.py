@@ -378,12 +378,15 @@ class KakuyomuTest(CacheTestCase):
         self.pages[url] = KAKUYOMU_PAGE.replace("/episodes/201", "/episodes/none")  # 次の話がまだない
         path, adjacent = episodes.get_epub("kakuyomu", "100", "200")
         self.assertEqual(adjacent, {"prev": "199", "next": None})
-        modified = path.stat().st_mtime_ns
+        epub = path.read_bytes()
 
         self.pages[url] = KAKUYOMU_PAGE
         self.assertEqual(episodes.refresh_kakuyomu_adjacent("100", "200"), {"prev": "199", "next": "201"})
         self.assertEqual(episodes.get_epub("kakuyomu", "100", "200"), (path, {"prev": "199", "next": "201"}))
-        self.assertEqual(path.stat().st_mtime_ns, modified)
+        # 本文の EPUB は作り直さない（作り直すと、中に入る作成時刻が変わる）。
+        # 更新時刻では確かめない（読むたびに新しくしているので変わる）
+        self.assertEqual(path.read_bytes(), epub)
+        self.assertEqual(len(self.fetched), 2)  # 最初の取得と、再確認の 1 回だけ
 
     def test_first_episode(self):
         self.pages["https://kakuyomu.jp/works/100"] = KAKUYOMU_WORK_PAGE
