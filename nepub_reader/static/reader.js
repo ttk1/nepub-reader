@@ -205,14 +205,19 @@ const start = () =>
 const TOOLBAR_KEY = `${READER_STORAGE_KEY}:toolbar`
 // ツールバーを出し入れした直後の relocate（ページの大きさが変わったことによるもの）を見分ける
 let relayout = false
+// これまでに出し入れしたことがあるか（保存された値があるか）。戻し方の知らせは、初めて隠したときだけ出す
+let toggledBefore = false
 try {
-  toolbar.hidden = localStorage.getItem(TOOLBAR_KEY) === 'hidden'
+  const saved = localStorage.getItem(TOOLBAR_KEY)
+  toggledBefore = saved !== null
+  toolbar.hidden = saved === 'hidden'
 } catch {}
 viewer.addEventListener('tap', () => {
   toolbar.hidden = !toolbar.hidden
   relayout = true
-  // 戻し方が分かるように知らせる（ページをめくると消える）
-  setStatus(toolbar.hidden ? 'ツールバーを隠しました（ページの中央を押すと戻ります）' : '')
+  // 初めて隠したときは、戻し方が分かるように知らせる（ページをめくると消える）。それ以外は、出ている知らせを消すだけ
+  setStatus(toolbar.hidden && !toggledBefore ? 'ツールバーを隠しました（ページの中央を押すと戻ります）' : '')
+  toggledBefore = true
   try {
     localStorage.setItem(TOOLBAR_KEY, toolbar.hidden ? 'hidden' : 'shown')
   } catch {}
