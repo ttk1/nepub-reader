@@ -57,6 +57,8 @@ Windows の Git Bash から `docker` にコンテナ内パス（`/work` など�
 - Python の依存は `flask` と `nepub` のみ。`uv.lock` をコミットし、PyPI のパッケージはハッシュで固定する。nepub は `pyproject.toml` でも git のコミットを指定する（`uv lock --upgrade` で未確認の最新コミットに上がらないように）。ビルドは `uv sync --frozen`。
 - `uv.lock` の更新はホストで行わず、Dockerfile と同じ python・uv のイメージに git を入れた一時イメージで、リポジトリをマウントして `uv lock` を実行する。
 - Docker イメージ（python・uv）はバージョンと digest（`@sha256:...`）で固定する。
+- 依存とイメージが古くなっていないかは、ときどき確かめる: 固定している版の脆弱性の報告は `https://pypi.org/pypi/<pkg>/<version>/json` の `vulnerabilities`、python のイメージのタグと更新日は `https://hub.docker.com/v2/repositories/library/python/tags?name=3.12.`、uv は GitHub のリリース一覧で分かる。Python 3.12 はセキュリティ修正だけの系列なので、新しい版が出ていたら上げる。
+- Docker Hub の応答には、タグの digest（`digest`）と、アーキテクチャごとのイメージの digest（`images[].digest`）がある。Dockerfile に書くのはタグの digest で、`docker inspect` の `RepoDigests` と一致する。
 - 依存・イメージを追加・更新するときは:
   1. 本当に必要か（自前で書けないか）を検討する
   2. 公式・実績のあるものか確認する
