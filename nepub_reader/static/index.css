@@ -54,7 +54,8 @@
     --bg-color: #efe6d0;
     --card-bg: #f8f1e0;
     --text-color: #4a3a2c;
-    --text-secondary: #8a7560;
+    /* 小さな文字でも読めるコントラスト（背景に対して 4.5:1 以上）にする */
+    --text-secondary: #75614d;
     --border-color: #dccfb4;
     --accent: #8a4b08;
     --accent-soft: #efe2c6;
@@ -163,6 +164,8 @@ button[type="submit"] {
     transition: background 0.15s ease;
 }
 button[type="submit"]:hover { background: var(--button-hover); }
+/* 送信してから画面が変わるまで（カクヨムの作品ページは、最初の話を調べるのに少しかかる） */
+button[type="submit"]:disabled { opacity: 0.6; cursor: progress; }
 .hint {
     font-size: 0.85em;
     color: var(--text-secondary);

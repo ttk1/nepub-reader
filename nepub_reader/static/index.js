@@ -149,6 +149,19 @@ clearButton.addEventListener('click', () => {
   if (confirm('読書履歴をすべて削除しますか？')) updateHistory([], '読書履歴をすべて削除しました')
 })
 
+// URL を送信したら、画面が変わるまでボタンを押せなくする（二重に送信しないように）
+const form = document.getElementById('url-form')
+const submitButton = form.querySelector('button[type="submit"]')
+form.addEventListener('submit', () => {
+  submitButton.disabled = true
+  submitButton.textContent = '開いています…'
+})
+// 「戻る」で戻ってきたときは、元に戻す
+addEventListener('pageshow', () => {
+  submitButton.disabled = false
+  submitButton.textContent = '読む'
+})
+
 renderHistory()
 // ブラウザの「戻る」でリーダーから戻ったとき（ページが前の表示のまま復元される）と、
 // ほかのタブで読み進めたときにも、一覧を新しくする

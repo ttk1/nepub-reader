@@ -6,9 +6,12 @@ body { margin: 0; overscroll-behavior: none; }
 #reader { height: 100vh; height: 100dvh; }
 
 .epub-reader .toolbar > button:disabled { opacity: 0.35; cursor: default; background: none; }
-/* 狭い画面では「前の話」「次の話」を「前話」「次話」にして、作品名の場所を空ける */
+/* 話を開くまでは、元ページへのリンクの行き先がない */
+.epub-reader .toolbar > .source:not([href]) { display: none; }
+/* 狭い画面では「前の話」「次の話」を「前話」「次話」にし、元ページへのリンクを隠して、作品名の場所を空ける */
 @media (max-width: 600px) {
-    .epub-reader .toolbar .wide { display: none; }
+    .epub-reader .toolbar .wide,
+    .epub-reader .toolbar > .source { display: none; }
 }
 
 /* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */

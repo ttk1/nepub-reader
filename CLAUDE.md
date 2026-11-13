@@ -106,4 +106,5 @@ epub-viewer の Playwright イメージ（epub-viewer の `compose.yaml` と同�
 - スワイプは、Chromium なら CDP の `Input.dispatchTouchEvent`（`touchStart` → `touchMove` を数回 → `touchEnd`）で再現できる。Firefox と WebKit は、本文の iframe の文書に `TouchEvent` を合成して送る（Linux の WebKit は `Touch` を作れないので、`touches` などを持たせた `Event` で代える）。
 - `page.route()` でページ自体（`/read/...`）のレスポンスを差し替えると、Chromium では続く静的ファイルの読み込みが止められることがある。
 - 元サイトへのアクセスは最小限にする（同じ話はキャッシュが使われる）。最新話や読み込みの失敗は `page.route()` でレスポンスを差し替えて再現する（差し替えた 404 は、Chromium と WebKit ではコンソールのエラーとして記録される）。
+- Playwright の `click()` は、クリックで始まった画面遷移が終わるまで戻らない。遷移の途中の状態（送信中のボタンなど）は、ページの中で記録しておいて後から読む。
 - スマホ幅（390px 程度、タッチあり）でも確認する。はみ出しは `scrollWidth` では見つからないことがあるので、要素の位置かスクリーンショットで確かめる。
