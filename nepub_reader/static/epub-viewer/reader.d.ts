@@ -35,6 +35,7 @@ export interface ReaderOptions {
      * The values that the settings menu offers for line height, width and margin, each as
      * `[value, label]`: for a site whose pages want other steps than those of the reader. A setting
      * that is left out keeps the choices of the reader; one with no choices is not in the menu.
+     * Widths that are not narrower than the page are not shown. They can be changed later with setChoices().
      */
     choices: Partial<ReaderChoices>;
     /** The sizes that the font size buttons go through: from `min` to `max` px, each `step` times the one before. */
@@ -80,6 +81,14 @@ export declare class EpubReader {
      * changed settings are, so that the rest keeps following the initial settings given by the app.
      */
     setSettings(changes: Partial<ReaderSettings>): void;
+    /**
+     * Replaces the choices that the settings menu offers. Takes what the `choices` option takes: a
+     * setting that is left out keeps its choices, one with no choices leaves the menu. For choices
+     * that depend on something that changes (e.g. margins that grow with the window). Only the menu
+     * changes: the settings keep their values (see setSettings()), and a choice with the value of its
+     * setting is shown as chosen.
+     */
+    setChoices(offered: Partial<ReaderChoices>): void;
     /**
      * Opens a book at `options.location`, the saved position, or the beginning. When called again
      * before the book is ready, the later call wins, and both give the book of the later call.

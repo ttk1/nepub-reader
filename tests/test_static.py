@@ -93,7 +93,7 @@ class PageMarginTest(unittest.TestCase):
         scales = json.loads(re.search(r"const WIDE_SCALES = (\[\[.*\]\])", js)[1])
         self.assertEqual(scales, [[int(width), float(zoom)] for width, zoom, _ in wide])
 
-        narrowest = int(re.search(r"const margins = \[\[wide\((\d+)\)", js)[1])
+        narrowest = int(re.search(r"const MARGINS = \[\[(\d+)", js)[1])
         size = int(re.search(r"\.epub-reader \{ --mini-size: (\d+)px; \}", css)[1])
         below = int(re.search(r"\.mini-text \{[^}]*\bbottom: (\d+)px;", css)[1])
         gap = 6  # 文字と本文の間。行末は余白ぴったりまで届くので、間がないとくっついて見える

@@ -17,6 +17,7 @@ const DEFAULT_CHOICES = {
     maxWidth: [[0, '全幅'], [1400, '1400'], [1200, '1200'], [1000, '1000'], [800, '800'], [600, '600']],
     margin: [[16, '狭い'], [32, '標準'], [64, '広い'], [96, 'とても広い']],
 };
+const CHOICE_LABELS = { lineHeight: '行間', maxWidth: '表示幅', margin: '余白' };
 const DEFAULT_FONT_SIZE_STEPS = { min: 12, max: 120, step: 1.2 };
 const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const SEEK_KEYS = {
@@ -35,7 +36,7 @@ const choices = (name, label, options) => !options.length ? '' : `
     </span>
   </div>`;
 const swatch = ({ background, color }) => `background:${background};color:${color}`;
-const toolbar = (offered) => `
+const toolbar = `
   <details class="toc" hidden>
     <summary>目次</summary>
     <div class="panel toc-list"></div>
@@ -56,9 +57,6 @@ const toolbar = (offered) => `
           </span>
         </div>
         ${choices('font', 'フォント', [['mincho', '明朝'], ['gothic', 'ゴシック'], ['book', '本の指定']])}
-        ${choices('lineHeight', '行間', offered.lineHeight)}
-        ${choices('maxWidth', '表示幅', offered.maxWidth)}
-        ${choices('margin', '余白', offered.margin)}
         ${choices('writingMode', '表示方向', [['auto', '自動'], ['vertical', '縦書き'], ['horizontal', '横書き']])}
       </div>
       <div class="not-vertical">
@@ -93,13 +91,15 @@ const STYLE = `
      Only its thumb takes the pointer. A touch is given to a control near it: with the whole line
      taking it, a swipe that began at the top of the page moved the slider, and the place was lost. */
   .epub-reader .seek {
-    --fill: linear-gradient(to right, var(--fg) calc(var(--progress, 0) * 100%), transparent 0);
     --thumb: 28px; /* a dot of 12px, with room around it for a finger */
+    /* Between the places where the middle of the thumb is at the start and at the end: half a thumb in from the ends. */
+    --stops: transparent calc(var(--thumb) / 2), var(--fg) 0, var(--fg) calc(var(--thumb) / 2 + var(--progress, 0) * (100% - var(--thumb))), transparent 0;
+    --fill: linear-gradient(to right, var(--stops));
     position: absolute; left: 0; bottom: calc(var(--thumb) / -2); box-sizing: border-box;
     width: 100%; height: var(--thumb); margin: 0; padding: 0;
     -webkit-appearance: none; appearance: none; background: none; pointer-events: none;
   }
-  .epub-reader .seek[dir='rtl'] { --fill: linear-gradient(to left, var(--fg) calc(var(--progress, 0) * 100%), transparent 0); }
+  .epub-reader .seek[dir='rtl'] { --fill: linear-gradient(to left, var(--stops)); }
   .epub-reader .seek::-webkit-slider-runnable-track { height: 2px; background: var(--fill); }
   .epub-reader .seek::-moz-range-track { height: 2px; background: var(--fill); }
   .epub-reader .seek::-webkit-slider-thumb {
@@ -160,6 +160,7 @@ const STYLE = `
   .epub-reader[data-layout='reflowable'] .only-pre-paginated,
   .epub-reader[data-writing='vertical'] .not-vertical { display: none; }
   .epub-reader .row { display: grid; grid-template-columns: 5.5em 1fr; align-items: center; }
+  .epub-reader .settings [hidden] { display: none; } /* rows and choices that would do nothing */
   .epub-reader .row > :first-child { opacity: 0.7; }
   .epub-reader .choices { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
   .epub-reader .choices label { position: relative; display: flex; }
@@ -196,13 +197,14 @@ export class EpubReader {
     #menuObserver = new MutationObserver(() => {
         this.#root.classList.toggle('menu-open', !!this.toolbar.querySelector('details[open]'));
     });
+    #widthObserver = new ResizeObserver(() => this.#fitChoices());
     constructor(root, { storage = defaultStorage(), storageKey = 'epub-viewer', settings = {}, viewer = {}, choices: offered = {}, fontSizeSteps = {} } = {}) {
         const doc = root.ownerDocument;
         if (!doc.getElementById('epub-reader-style')) {
             doc.head.append(Object.assign(doc.createElement('style'), { id: 'epub-reader-style', textContent: STYLE }));
         }
         root.classList.add('epub-reader');
-        root.innerHTML = `<header class="toolbar">${toolbar({ ...DEFAULT_CHOICES, ...offered })}</header><div class="viewer"></div>`;
+        root.innerHTML = `<header class="toolbar">${toolbar}</header><div class="viewer"></div>`;
         this.#root = root;
         this.#storage = storage;
         this.#storageKey = storageKey;
@@ -234,6 +236,8 @@ export class EpubReader {
         doc.addEventListener('click', this.#dismiss);
         this.#menuObserver.observe(this.toolbar, { attributeFilter: ['open'], subtree: true });
         this.#systemDark.addEventListener('change', this.#apply);
+        this.setChoices({ ...DEFAULT_CHOICES, ...offered });
+        this.#widthObserver.observe(this.#part('viewer'));
         this.#apply();
     }
     get book() {
@@ -246,6 +250,42 @@ export class EpubReader {
         this.#settings = { ...this.#settings, ...changes };
         this.#save('settings', { ...this.#load('settings'), ...changes });
         this.#apply();
+    }
+    setChoices(offered) {
+        const row = (name) => this.toolbar.querySelector(`.settings input[name=${name}]`)?.closest('.row');
+        const names = Object.keys(CHOICE_LABELS);
+        for (const [i, name] of names.entries()) {
+            const options = offered[name];
+            if (!options)
+                continue;
+            const old = row(name);
+            const focused = old?.contains(this.#root.ownerDocument.activeElement);
+            const after = old ?? [...names.slice(i + 1), 'writingMode'].map(row).find(Boolean);
+            after?.insertAdjacentHTML('beforebegin', choices(name, CHOICE_LABELS[name], options));
+            old?.remove();
+            const made = row(name);
+            this.#showChosen(made?.querySelectorAll('input') ?? []);
+            if (focused)
+                (made?.querySelector(':checked') ?? made?.querySelector('input') ?? this.toolbar.querySelector('.settings summary'))?.focus({ preventScroll: true });
+        }
+        this.#fitChoices();
+    }
+    #fitChoices() {
+        const width = this.#root.querySelector('.viewer')?.clientWidth ?? 0;
+        const inputs = [...this.toolbar.querySelectorAll('.settings input[name=maxWidth]')];
+        const row = inputs[0]?.closest('.row');
+        if (!row)
+            return;
+        for (const input of inputs)
+            input.parentElement.hidden = Number(input.value) >= width && Number(input.value) > 0;
+        row.hidden = !inputs.some((input) => Number(input.value) > 0 && !input.parentElement.hidden);
+        const focus = this.#root.ownerDocument.activeElement;
+        if (row.contains(focus) && focus.closest('.row[hidden], label[hidden]'))
+            this.toolbar.querySelector('.settings summary')?.focus({ preventScroll: true });
+    }
+    #showChosen(inputs) {
+        for (const input of inputs)
+            input.checked = input.value === String(this.#settings[input.name]);
     }
     open(source, options = {}) {
         const opening = this.#open(source, options, () => opening === this.#opening);
@@ -286,6 +326,7 @@ export class EpubReader {
         this.#root.ownerDocument.removeEventListener('keydown', this.#onKeydown);
         this.#systemDark.removeEventListener('change', this.#apply);
         this.#menuObserver.disconnect();
+        this.#widthObserver.disconnect();
         this.#opening = undefined;
         this.viewer.destroy();
         this.#book?.destroy();
@@ -307,9 +348,7 @@ export class EpubReader {
         style.setProperty('--bg', theme.background);
         style.setProperty('--fg', theme.color);
         style.colorScheme = name === 'dark' ? 'dark' : 'light';
-        for (const input of this.toolbar.querySelectorAll('.settings input')) {
-            input.checked = input.value === String(settings[input.name]);
-        }
+        this.#showChosen(this.toolbar.querySelectorAll('.settings input'));
         this.#part('font-size').textContent = String(settings.fontSize);
         this.viewer.setOptions({
             theme,

@@ -29,26 +29,15 @@ const el = (tag, props, ...children) => {
   return element
 }
 
-// ---- 画面の部品 ----
+// ---- 表示設定の保存と、広い画面での倍率 ----
 
 // 広い画面では、ツールバーなどを拡大している。ページの余白も、同じ幅から同じ倍率で広げる
 // （[幅, 倍率]。reader.css の末尾と同じ値。そろっていることは tests/test_static.py が確かめている）
 const WIDE_SCALES = [[2400, 1.25], [3000, 1.5], [3600, 1.75]]
 const wideQueries = WIDE_SCALES.map(([width]) => matchMedia(`(min-width: ${width}px)`))
 const currentWideScale = () => WIDE_SCALES.reduce((scale, [, wider], i) => (wideQueries[i].matches ? wider : scale), 1)
-const wideScale = currentWideScale()
-// 余白の選択肢と倍率は、開いたときの幅で決まる。開いたまま倍率の変わる幅をまたぐと、進み具合の文字だけが
-// 大きくなって（reader.css）本文に重なるので、開き直して決め直す（読書位置は保存してあり、同じ場所に戻る）。
-// 印刷の間は、紙の幅で判定し直されて幅が変わったように見えるので、開き直さない（印刷を終えて元の幅に戻れば、
-// 倍率は開いたときと同じなので、そのときも開き直さない）
-let printing = false
-addEventListener('beforeprint', () => (printing = true))
-addEventListener('afterprint', () => (printing = false))
-for (const query of wideQueries) {
-  query.addEventListener('change', () => {
-    if (!printing && currentWideScale() !== wideScale) location.reload()
-  })
-}
+// いまの余白と、その選択肢に掛けてある倍率。ウィンドウの幅が変わったら、fitToWindow() が掛け直す
+let wideScale = currentWideScale()
 
 /**
  * 保存する設定（JSON）の余白を `by` 倍する。余白は、倍率を掛ける前の値で保存する: 広げた値のまま保存すると、
@@ -91,26 +80,28 @@ const DEFAULT_LINE_HEIGHT = 1.6
 /** @type {[number, string][]} */
 const lineHeights = [[1.4, '狭い'], [DEFAULT_LINE_HEIGHT, '標準'], [1.8, 'やや広い'], [2, '広い'], [2.2, 'とても広い']]
 
-// 表示幅は、この画面で選んで変わるもの（画面の幅より狭いもの）だけを並べる。1 つもなければ（スマートフォン）、
-// 設定メニューに出さない。広い画面で少しだけ狭めることもできるように、既定の選択肢（1400 まで）より広いものも用意する
-// 並べるのは広いほうから 5 つまで（設定メニューの 1 行に収まる数。広い画面で 600px まで狭めることは、まずない）
-const narrower = [2400, 1800, 1400, 1200, 1000, 800, 600].filter((px) => px < innerWidth).slice(0, 5)
-/** @type {[number, string][]} */
-const maxWidths = narrower.length ? [[0, '全幅'], ...narrower.map((px) => /** @type {[number, string]} */ ([px, String(px)]))] : []
+// 表示幅。広い画面で少しだけ狭めることもできるように、既定の選択肢（1400 まで）より広いものも用意する。
+// 並べるのは、ウィンドウより狭いもののうち、広いほうから 5 つまで（設定メニューの 1 行に収まる数。広い画面で
+// 600px まで狭めることは、まずない）。選んでも変わらないもの（ページの幅以上のもの）を隠すのと、1 つも残らないときに
+// 行ごと隠すのは、EpubReader がする
+const MAX_WIDTHS = [2400, 1800, 1400, 1200, 1000, 800, 600]
+/** @returns {[number, string][]} */
+const maxWidthChoices = () => [[0, '全幅'], ...MAX_WIDTHS.filter((px) => px < innerWidth).slice(0, 5).map((px) => /** @type {[number, string]} */ ([px, String(px)]))]
 
-// ページの余白の選択肢。広い画面では、ツールバーなどと同じ倍率で広げる（wideScale）。
-// ツールバーを隠している間の進み具合の文字を、下の余白に重ねて出す（reader.css）ので、
+// ページの余白（倍率を掛ける前の値）。ツールバーを隠している間の進み具合の文字を、下の余白に重ねて出す（reader.css）ので、
 // いちばん狭い余白でも、その文字が本文に重ならずに収まる広さにする（文字 12px + その下 2px + 本文との間 6px。
-// スマートフォンでは、これより広げると 1 ページの行が 1 行減る）
-const wide = (px) => px * wideScale
+// スマートフォンでは、これより広げると 1 ページの行が 1 行減る）。広い画面では、文字と同じ倍率（wideScale）を掛ける
 /** @type {[number, string][]} */
-const margins = [[wide(20), '狭い'], [wide(32), '標準'], [wide(64), '広い'], [wide(96), 'とても広い'], [wide(128), '特大'], [wide(160), '最大']]
+const MARGINS = [[20, '狭い'], [32, '標準'], [64, '広い'], [96, 'とても広い'], [128, '特大'], [160, '最大']]
+const DEFAULT_MARGIN = 32
+/** @returns {[number, string][]} */
+const marginChoices = () => MARGINS.map(([px, label]) => /** @type {[number, string]} */ ([px * wideScale, label]))
 
 const reader = new EpubReader(document.getElementById('reader'), {
   storage: settingsStorage,
   storageKey: READER_STORAGE_KEY,
-  settings: { ...smallScreen, lineHeight: DEFAULT_LINE_HEIGHT, margin: wide(32) },
-  choices: { lineHeight: lineHeights, maxWidth: maxWidths, margin: margins },
+  settings: { ...smallScreen, lineHeight: DEFAULT_LINE_HEIGHT, margin: DEFAULT_MARGIN * wideScale },
+  choices: { lineHeight: lineHeights, maxWidth: maxWidthChoices(), margin: marginChoices() },
   fontSizeSteps: { step: FONT_SIZE_STEP },
 })
 
@@ -127,7 +118,37 @@ function snapToChoices(name, choices, saved) {
 }
 // 行間の 0 は、以前の選択肢の「本の指定」
 snapToChoices('lineHeight', lineHeights, reader.settings.lineHeight || DEFAULT_LINE_HEIGHT)
-snapToChoices('margin', margins, reader.settings.margin)
+snapToChoices('margin', marginChoices(), reader.settings.margin)
+
+// ウィンドウの幅が変わったら、幅で決まる選択肢（表示幅と余白）を、その場で入れ替える。
+// 倍率の変わる幅をまたいだら、余白は、選んでいた段のまま新しい倍率の値にする: そのままだと、進み具合の文字だけが
+// 大きくなって（reader.css）、狭い余白では本文に重なる。
+// 印刷の間は、紙の幅で判定し直されて幅が変わったように見えるので、何もしない
+let printing = false
+addEventListener('beforeprint', () => (printing = true))
+addEventListener('afterprint', () => (printing = false))
+let shownMaxWidths = String(maxWidthChoices())
+function fitToWindow() {
+  if (printing) return
+  const maxWidths = maxWidthChoices()
+  // 幅を変えている間は続けて呼ばれるので、並びが変わったときだけ入れ替える
+  if (String(maxWidths) !== shownMaxWidths) {
+    shownMaxWidths = String(maxWidths)
+    reader.setChoices({ maxWidth: maxWidths })
+  }
+  const scale = currentWideScale()
+  if (scale === wideScale) return
+  const margin = (reader.settings.margin / wideScale) * scale
+  wideScale = scale // 設定を保存するときに外す倍率も、ここから新しい倍率になる
+  reader.setChoices({ margin: marginChoices() })
+  reader.setSettings({ margin })
+}
+addEventListener('resize', fitToWindow)
+// WebKit は、resize のときにはまだ幅の判定（matchMedia）を新しくしていないので、判定が変わったときにも呼ぶ
+for (const query of wideQueries) query.addEventListener('change', fitToWindow)
+
+// ---- 画面の部品 ----
+
 const { toolbar, viewer } = reader
 /** @type {HTMLElement} */
 const title = toolbar.querySelector('.title')
