@@ -16,6 +16,8 @@
     --danger: #b3261e;
     --cover-bg: #fbfaf7;
     --cover-edge: #d9d5cb;
+    /* アイコンの朱。見出しの印の、行を移る目の動きの線と、進み具合の線に使う（背景に対して 3:1 以上） */
+    --brand: #d9472b;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 6px 16px rgb(0 0 0 / 0.07);
     --mincho: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "BIZ UDMincho", "Noto Serif JP", "Noto Serif CJK JP", "IPAexMincho", "IPAMincho", serif;
 }
@@ -32,6 +34,7 @@
     --danger: #a3241c;
     --cover-bg: #faf4e4;
     --cover-edge: #cfbf9d;
+    --brand: #c9401f;
     --shadow: 0 1px 2px rgb(74 58 44 / 0.1), 0 6px 16px rgb(74 58 44 / 0.1);
 }
 :root[data-theme="dark"] {
@@ -49,6 +52,8 @@
     --danger: #e0786f;
     --cover-bg: #1a1a1a;
     --cover-edge: #383838;
+    /* 黒いページでは、鮮やかな朱はまぶしいので、少し落とす */
+    --brand: #c9553d;
     --shadow: none;
 }
 * { box-sizing: border-box; }
@@ -84,13 +89,21 @@ button, input { font: inherit; color: inherit; }
     font-weight: 600;
     letter-spacing: 0.02em;
 }
-/* アイコンと同じ絵。角を丸くして、文字の高さに合わせる */
+/* アイコンと同じ絵（縦書きの 2 行と、行を移る目の動きで N）を、文字の高さに合わせて置く。
+   行は題字と同じ色、目の動きはアイコンと同じ朱（--brand。テーマごとに、背景に対して 3:1 以上になる濃さ） */
 .site-header .logo {
     width: 1.3em;
     height: 1.3em;
-    margin-right: 0.45em;
-    border-radius: 22%;
+    margin-right: 0.3em;
     vertical-align: -0.28em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 4.4;
+    stroke-linecap: round;
+}
+.site-header .logo-eye {
+    stroke: var(--brand);
+    stroke-width: 2.6;
 }
 .site-header .tagline {
     margin: 0;
@@ -246,7 +259,8 @@ main > * { margin: 36px 0 0; }
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--accent);
+    /* アイコンの朱（どこまで読んだか = 目がどこまで進んだか。見出しの印の、目の動きの線と同じ色） */
+    background: var(--brand);
 }
 
 /* ---- URL から開く ---- */

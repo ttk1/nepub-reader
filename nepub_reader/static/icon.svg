@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- ホーム画面用のアイコン（開いた本）。PNG はこのファイルから書き出す（手順は CLAUDE.md） -->
-  <rect width="512" height="512" fill="#2563eb"/>
-  <path d="M256 150c-36-26-84-38-140-38v232c56 0 104 12 140 38z" fill="#ffffff"/>
-  <path d="M256 150c36-26 84-38 140-38v232c-56 0-104 12-140 38z" fill="#dbe6fd"/>
-  <path d="M256 150v232" stroke="#2563eb" stroke-width="10"/>
-  <path d="M150 176c30 3 56 11 78 24M150 226c30 3 56 11 78 24M150 276c30 3 56 11 78 24" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round" opacity="0.55"/>
-  <path d="M362 176c-30 3-56 11-78 24M362 226c-30 3-56 11-78 24M362 276c-30 3-56 11-78 24" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round" opacity="0.55"/>
+  <!-- アイコン（ブラウザのタブと、ホーム画面に追加したとき）。縦書きの 2 行（太い線）と、右の行の終わりから左の行の頭へ
+       移る目の動き（朱の線）で、nepub の N になる。PNG はこのファイルから書き出す（手順は CLAUDE.md）。
+       丸く切り抜かれても欠けないよう、絵は中央の 80% の円の中に収める -->
+  <rect width="512" height="512" fill="#1b1917"/>
+  <path d="M336 384L176 128" stroke="#e5502f" stroke-width="34" stroke-linecap="round"/>
+  <path d="M336 128v256M176 128v256" stroke="#f1e8d5" stroke-width="58" stroke-linecap="round"/>
 </svg>

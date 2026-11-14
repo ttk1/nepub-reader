@@ -57,6 +57,27 @@ class ThemeTest(unittest.TestCase):
         self.assertEqual((manifest["background_color"], manifest["theme_color"]), (background, background))
 
 
+class BrandColorTest(unittest.TestCase):
+    def test_brand_color_stands_out_from_the_page_in_every_theme(self):
+        # アイコンの朱（--brand）は、見出しの印の線と、進み具合の線に使っていて、テーマごとに色を書いている。
+        # 背景を変えたときに見えにくいまま残らないように、どのテーマでも、ページの背景（--bg）と、進み具合の線を置く
+        # 面（--surface）に対して 3:1 以上（文字でない図の目安）であることを確かめる
+        def luminance(color: str) -> float:
+            channels = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+            r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        css = read("index.css")
+        for theme in ["light", "sepia", "dark"]:
+            selector = ":root {" if theme == "light" else f':root[data-theme="{theme}"] {{'
+            block = css[css.index(selector) :].split("}")[0]
+            brand = luminance(re.search(r"--brand: (#[0-9a-f]{6});", block)[1])
+            for name in ["--bg", "--surface"]:
+                background = luminance(re.search(rf"{name}: (#[0-9a-f]{{6}});", block)[1])
+                lighter, darker = max(brand, background), min(brand, background)
+                self.assertGreaterEqual((lighter + 0.05) / (darker + 0.05), 3, f"{theme} {name}")
+
+
 class PageMarginTest(unittest.TestCase):
     def test_margins_grow_with_the_toolbar_and_keep_room_for_the_progress_text(self):
         # ツールバーを隠している間の進み具合の文字（reader.css）は、ページの下の余白に重ねて出す。
