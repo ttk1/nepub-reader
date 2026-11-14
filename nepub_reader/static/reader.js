@@ -227,63 +227,49 @@ const start = () =>
   whileLoading(async () => {
     try {
       await show(firstEpisode)
+      startFailed = false
     } catch (e) {
+      startFailed = true
       setStatus(e.message, { label: '再試行', run: start })
     }
+    showToolbar()
   })
 
 // ---- 操作 ----
 
-// ページの中央のクリック・タップで、ツールバーを出し入れする（隠した分だけページが広がる）。
-// 隠したかどうかは覚えておき、次に開いたときも同じにする
-const TOOLBAR_KEY = `${READER_STORAGE_KEY}:toolbar`
-// ツールバーを出し入れした直後の relocate（ページの大きさが変わったことによるもの）を見分ける
-let relayout = false
-// これまでに出し入れしたことがあるか（保存された値があるか）。戻し方の知らせは、初めて隠したときだけ出す
-let toggledBefore = false
-// 利用者がツールバーを隠しているか
-let toolbarHidden = false
+// ツールバーは、ページの上に重ねて出す（reader.css）。ページはいつも画面いっぱいで、ツールバーを出し入れしても
+// 大きさが変わらない。ツールバーの分だけページを縮めると、出し入れのたびに本文が組み直され、読んでいる場所が
+// ずれて分からなくなる。
+// ページの中央のクリック・タップで出し入れする。出しているとページの上の端が隠れるので、操作するときだけ出すもの。
+// 出したかどうかは覚えず、開いたときはいつも隠しておく
+let toolbarOpen = false
 // 隠したツールバーを、マウスを画面の上の端に寄せている間だけ出しているか
 let peeking = false
-try {
-  const saved = localStorage.getItem(TOOLBAR_KEY)
-  toggledBefore = saved !== null
-  toolbarHidden = saved === 'hidden'
-} catch {}
+// 話を開けなかった。隠していても、トップページへ戻るリンクのあるツールバーを出しておく
+let startFailed = false
 
 function showToolbar() {
-  // のぞいている間は、ページの上に重ねて出す（reader.css の .peek）。ページの大きさが変わらないので、
-  // マウスを動かすたびに本文が組み直されない。ページの大きさが変わらない順に切り替える
-  if (peeking) root.classList.add('peek')
-  toolbar.hidden = toolbarHidden && !peeking
+  toolbar.hidden = !(toolbarOpen || peeking || startFailed)
   miniProgress.hidden = !toolbar.hidden
-  if (!peeking) root.classList.remove('peek')
-  // 進み具合の文字の場所は、のぞいている間も空けたままにする（ページの大きさを変えないため）
-  root.classList.toggle('toolbar-hidden', toolbarHidden)
 }
+// M キーで出したときに、フォーカスを置けるようにする
+toolbar.tabIndex = -1
 showToolbar()
 
-viewer.addEventListener('tap', () => {
-  toolbarHidden = !toolbarHidden
+function toggleToolbar() {
+  toolbarOpen = !toolbarOpen
   peeking = false
   showToolbar()
-  relayout = true
-  // 初めて隠したときは、戻し方が分かるように知らせる（ページをめくると消える）。それ以外は、出ている知らせを消すだけ
-  const hint = matchMedia('(hover: hover)').matches ? 'ページの中央を押すと戻ります。マウスを画面の上の端に寄せても出ます' : 'ページの中央を押すと戻ります'
-  setStatus(toolbarHidden && !toggledBefore ? `ツールバーを隠しました（${hint}）` : '')
-  toggledBefore = true
-  try {
-    localStorage.setItem(TOOLBAR_KEY, toolbarHidden ? 'hidden' : 'shown')
-  } catch {}
-})
+}
+viewer.addEventListener('tap', toggleToolbar)
 
-// 隠したツールバーは、戻し方（ページの中央を押す）を忘れると出せなくなる。マウスを画面の上の端（ツールバーが
-// あったあたり）に寄せたら出し、離れたら隠す。タッチ操作には、寄せるという動きがないので働かせない
+// マウスを画面の上の端（ツールバーが出るあたり）に寄せても出し、離れたら隠す（出し方を忘れても出せるように）。
+// タッチ操作には、寄せるという動きがないので働かせない
 // ツールバーの高さより少し広い範囲。広い画面ではツールバーを拡大している（reader.css）ので、その分広げる
 const peekZone = () => 48 * (Number(getComputedStyle(toolbar).zoom) || 1)
 /** マウスが動いた。y は画面の上の端からの位置、onToolbar はツールバー（メニューを含む）の上にあるか */
 function onMouseMove(y, onToolbar) {
-  if (!toolbarHidden) return
+  if (toolbarOpen) return
   // メニューを開いている間は、マウスが離れても隠さない（メニューを閉じた後で、離れていれば隠す）
   const wanted = onToolbar || y <= peekZone() || (peeking && toolbar.querySelector('details[open]') !== null)
   if (wanted === peeking) return
@@ -295,13 +281,20 @@ addEventListener('pointermove', (e) => isMouse(e) && onMouseMove(e.clientY, e.ta
 // マウスが画面の外へ出た（ブラウザのタブやアドレスバーへ動かした）
 document.documentElement.addEventListener('pointerleave', (e) => isMouse(e) && onMouseMove(Infinity, false))
 
-// N で次の話、P で前の話。ページ送りのキーは EpubReader が受ける
+// N で次の話、P で前の話、M でツールバーの出し入れ。ページ送りのキーは EpubReader が受ける
 function onKey(e) {
-  // 押しっぱなしでは移らない（話を次々に取得して、元サイトに負荷をかけないように）
+  // 押しっぱなしでは働かせない（話を次々に取得して、元サイトに負荷をかけないように）
   if (e.repeat || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return
   const key = e.key.toLowerCase()
   if (key === 'n') turn(true)
   else if (key === 'p') turn(false)
+  else if (key === 'm' && !toolbar.querySelector('details[open]')) {
+    // キーボードだけで使うときは、これがツールバーの唯一の出し方。出したら、続けて Tab で中のボタンへ進めるように、
+    // フォーカスをツールバーに置く（本文にあると、Tab がツールバーへ行かない）。
+    // メニューを開いている間は働かせない（メニューごと隠すと、見えないメニューが、キーでのページ送りを止め続ける）
+    toggleToolbar()
+    if (toolbarOpen) toolbar.focus()
+  }
 }
 addEventListener('keydown', onKey)
 
@@ -317,9 +310,8 @@ viewer.addEventListener('bookend', () => turn(true))
 viewer.addEventListener('bookstart', () => turn(false))
 viewer.addEventListener('relocate', () => {
   if (loading || !current) return
-  // ページをめくったら「最新話です」などを消す（ツールバーの出し入れによる再レイアウトでは消さない）
-  if (!relayout) setStatus('')
-  relayout = false
+  // ページをめくったら「最新話です」などを消す
+  setStatus('')
   savePosition(site, novelId, current.episode, viewer.location)
 })
 // ページ送りや書籍内のリンクでの移動に失敗した（EpubViewer のエラーは英語なので、何が起きたかを前に付ける）

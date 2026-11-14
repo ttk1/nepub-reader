@@ -19,18 +19,23 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
     .epub-reader .toolbar > .source { display: none; }
 }
 
-/* 隠したツールバーを、マウスを画面の上の端に寄せている間だけ出すとき（reader.js が .peek を付ける）。
-   ページの上に重ねて、ページの大きさを変えない。ツールバー自身には背景がないので、リーダーの背景を引き継ぐ */
-.epub-reader.peek > .toolbar {
+/* ツールバーは、ページの上に重ねて出す（reader.js が出し入れする）。ページはいつも画面いっぱいで、ツールバーを出しても
+   大きさが変わらない: ツールバーの分だけページを縮めると、出し入れのたびに本文が組み直されて、読んでいる場所がずれる。
+   ツールバー自身には背景がないので、リーダーの背景を引き継ぐ。
+   セレクターを #reader で始めるのは、後から読み込まれる epub-viewer の指定（.epub-reader .toolbar の position: relative）に勝つため */
+#reader > .toolbar {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     background: inherit;
     box-shadow: 0 2px 12px rgb(0 0 0 / 0.18);
+    /* M キーで出したときにフォーカスを置く（reader.js）。帯の全体を囲む枠は出さない */
+    outline: none;
 }
 
 /* ツールバーを隠している間の、進み具合の表示（reader.js）。ページの余白に重ねる（余白が足りないときの扱いは下）。
+   ツールバーを出している間は、同じものがツールバーに出るので消す。
    クリックやスワイプは、下にあるページへそのまま届かせる */
 .epub-reader > .mini-progress {
     position: absolute;
@@ -70,7 +75,7 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
    間を空けないと本文とくっついて見える）。余白が足りていれば 0 で、ページは画面いっぱいのまま。
    文字を余白に合わせて小さくはしない（広い画面で読めない大きさになる） */
 #reader { box-sizing: border-box; }
-.epub-reader.toolbar-hidden { padding-bottom: max(0px, var(--mini-size) + 10px - var(--page-margin, 32px)); }
+.epub-reader { padding-bottom: max(0px, var(--mini-size) + 10px - var(--page-margin, 32px)); }
 
 /* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */
 #status {
