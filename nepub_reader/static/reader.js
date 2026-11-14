@@ -31,13 +31,45 @@ const el = (tag, props, ...children) => {
 
 // ---- 画面の部品 ----
 
+// 広い画面では、ツールバーなどを拡大している。ページの余白も、同じ幅から同じ倍率で広げる
+// （[幅, 倍率]。reader.css の末尾と同じ値。そろっていることは tests/test_static.py が確かめている）
+const WIDE_SCALES = [[2400, 1.25], [3000, 1.5], [3600, 1.75]]
+const wideQueries = WIDE_SCALES.map(([width]) => matchMedia(`(min-width: ${width}px)`))
+const currentWideScale = () => WIDE_SCALES.reduce((scale, [, wider], i) => (wideQueries[i].matches ? wider : scale), 1)
+const wideScale = currentWideScale()
+// 余白の選択肢と倍率は、開いたときの幅で決まる。開いたまま倍率の変わる幅をまたぐと、進み具合の文字だけが
+// 大きくなって（reader.css）本文に重なるので、開き直して決め直す（読書位置は保存してあり、同じ場所に戻る）。
+// 印刷の間は、紙の幅で判定し直されて幅が変わったように見えるので、開き直さない（印刷を終えて元の幅に戻れば、
+// 倍率は開いたときと同じなので、そのときも開き直さない）
+let printing = false
+addEventListener('beforeprint', () => (printing = true))
+addEventListener('afterprint', () => (printing = false))
+for (const query of wideQueries) {
+  query.addEventListener('change', () => {
+    if (!printing && currentWideScale() !== wideScale) location.reload()
+  })
+}
+
+/**
+ * 保存する設定（JSON）の余白を `by` 倍する。余白は、倍率を掛ける前の値で保存する: 広げた値のまま保存すると、
+ * 幅の違う画面で開いたときに、選んだ段（「標準」など）とは別の段の値に近くなって、段がずれる
+ */
+function scaleSavedMargin(json, by) {
+  try {
+    const saved = JSON.parse(json)
+    return typeof saved?.margin === 'number' ? JSON.stringify({ ...saved, margin: saved.margin * by }) : json
+  } catch {
+    return json // 壊れた保存データは、そのまま EpubReader に渡す（EpubReader が捨てる）
+  }
+}
+
 // EpubReader には表示設定だけを保存させる。読書位置は読書履歴と一緒に持つ（history.js）ので、保存させない
 const SETTINGS_KEY = `${READER_STORAGE_KEY}:settings`
 const settingsStorage = {
-  getItem: (key) => (key === SETTINGS_KEY ? localStorage.getItem(key) : null),
+  getItem: (key) => (key === SETTINGS_KEY ? scaleSavedMargin(localStorage.getItem(key), wideScale) : null),
   setItem: (key, value) => {
     if (key !== SETTINGS_KEY) return
-    localStorage.setItem(key, value)
+    localStorage.setItem(key, scaleSavedMargin(value, 1 / wideScale))
     // テーマが変わったかもしれないので、ページの側（theme.js。準備中の背景と、端末の上部の帯の色）に知らせる
     dispatchEvent(new Event('nepub-reader:settings'))
   },
@@ -66,11 +98,8 @@ const narrower = [2400, 1800, 1400, 1200, 1000, 800, 600].filter((px) => px < in
 /** @type {[number, string][]} */
 const maxWidths = narrower.length ? [[0, '全幅'], ...narrower.map((px) => /** @type {[number, string]} */ ([px, String(px)]))] : []
 
-// 広い画面では、ツールバーなどを拡大している。余白も、同じ幅から同じ倍率で広げる
-// （[幅, 倍率]。reader.css の末尾と同じ値。そろっていることは tests/test_static.py が確かめている）
-const WIDE_SCALES = [[2400, 1.25], [3000, 1.5], [3600, 1.75]]
-const wideScale = WIDE_SCALES.reduce((scale, [width, wider]) => (matchMedia(`(min-width: ${width}px)`).matches ? wider : scale), 1)
-// ページの余白の選択肢。ツールバーを隠している間の進み具合の文字を、下の余白に重ねて出す（reader.css）ので、
+// ページの余白の選択肢。広い画面では、ツールバーなどと同じ倍率で広げる（wideScale）。
+// ツールバーを隠している間の進み具合の文字を、下の余白に重ねて出す（reader.css）ので、
 // いちばん狭い余白でも、その文字が本文に重ならずに収まる広さにする（文字 12px + その下 2px + 本文との間 6px。
 // スマートフォンでは、これより広げると 1 ページの行が 1 行減る）
 const wide = (px) => px * wideScale
@@ -86,7 +115,7 @@ const reader = new EpubReader(document.getElementById('reader'), {
 })
 
 /**
- * 保存されていた設定が選択肢にないとき（選択肢を変える前の値、幅の違う画面で選んだ値）は、いちばん近い選択肢に寄せる。
+ * 保存されていた設定が選択肢にないとき（選択肢を変える前の値）は、いちばん近い選択肢に寄せる。
  * 表示幅は寄せない（画面より広い値は、選択肢になくても全幅と同じ表示で、広い画面で開いたときにまた効く）
  * @param {'lineHeight' | 'margin'} name
  * @param {[number, string][]} choices
