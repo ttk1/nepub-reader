@@ -69,13 +69,9 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
-/* 本文は、下の端からページの余白（--page-margin。reader.js が表示設定から入れる）の分だけ上で終わる。
-   余白が文字より狭いとき（余白「狭い」の 16px に、広い画面の 18px の文字など）は、文字が本文に重なるので、
-   足りない分だけページの下を空ける（文字の下に 2px、本文との間に 8px。行末は余白ぴったりまで届くので、
-   間を空けないと本文とくっついて見える）。余白が足りていれば 0 で、ページは画面いっぱいのまま。
-   文字を余白に合わせて小さくはしない（広い画面で読めない大きさになる） */
-#reader { box-sizing: border-box; }
-.epub-reader { padding-bottom: max(0px, var(--mini-size) + 10px - var(--page-margin, 32px)); }
+/* 本文は、下の端からページの余白の分だけ上で終わる。余白の選択肢（reader.js）は、いちばん狭いものでも
+   この文字が本文に重ならない広さにしてある（文字の下に 2px、本文との間に 6px 以上。行末は余白ぴったりまで届くので、
+   間がないと本文とくっついて見える）。文字を余白に合わせて小さくはしない（広い画面で読めない大きさになる） */
 
 /* 読み込み中・最新話などの知らせ。どのテーマの上でも読めるよう、色は固定にする */
 #status {
@@ -125,8 +121,8 @@ noscript p { margin: 0; padding: 16px; font: 14px/1.6 system-ui, sans-serif; }
 
 /* ---- 広い画面 ---- */
 /* 4K のディスプレイやテレビでは、ツールバーと知らせが小さく見える（本文は、利用者が決めた文字サイズで表示される）。
-   トップページ（index.css）と同じ幅と倍率で拡大する。隠している間の進み具合の文字は、下を空ける量の計算に使うので、
-   拡大ではなく文字の大きさで合わせる（同じ倍率） */
+   トップページ（index.css）と同じ幅と倍率で拡大する。隠している間の進み具合の文字も、同じ倍率で大きくする
+   （その文字が収まるよう、余白の選択肢も同じ倍率で広げている。reader.js） */
 @media (min-width: 2400px) { .epub-reader > .toolbar, #status { zoom: 1.25; } .epub-reader { --mini-size: 15px; } }
 @media (min-width: 3000px) { .epub-reader > .toolbar, #status { zoom: 1.5; } .epub-reader { --mini-size: 18px; } }
 @media (min-width: 3600px) { .epub-reader > .toolbar, #status { zoom: 1.75; } .epub-reader { --mini-size: 21px; } }

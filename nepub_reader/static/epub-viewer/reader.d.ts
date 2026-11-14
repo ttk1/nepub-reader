@@ -31,8 +31,24 @@ export interface ReaderOptions {
     storageKey: string;
     /** Initial settings, used until the user changes them. */
     settings: Partial<ReaderSettings>;
+    /**
+     * The values that the settings menu offers for line height, width and margin, each as
+     * `[value, label]`: for a site whose pages want other steps than those of the reader. A setting
+     * that is left out keeps the choices of the reader; one with no choices is not in the menu.
+     */
+    choices: Partial<ReaderChoices>;
+    /** The sizes that the font size buttons go through: from `min` to `max` px, each `step` times the one before. */
+    fontSizeSteps: Partial<FontSizeSteps>;
     /** Other EpubViewer options (e.g. `keyboard`, `wheel`, `cooldown`). Look-related ones, the margin among them, come from the settings. */
     viewer: Partial<ViewerOptions>;
+}
+/** The choices of the settings that take any number. Other values can still be set with setSettings(): the menu then shows none as chosen. */
+export type ReaderChoices = Record<'lineHeight' | 'maxWidth' | 'margin', [value: number, label: string][]>;
+export interface FontSizeSteps {
+    min: number;
+    max: number;
+    /** How many times larger the next size is. */
+    step: number;
 }
 export interface OpenOptions {
     /**
@@ -55,7 +71,7 @@ export declare class EpubReader {
     readonly toolbar: HTMLElement;
     readonly viewer: EpubViewer;
     /** `root` must have a height; the reader fills it. */
-    constructor(root: HTMLElement, { storage, storageKey, settings, viewer }?: Partial<ReaderOptions>);
+    constructor(root: HTMLElement, { storage, storageKey, settings, viewer, choices: offered, fontSizeSteps }?: Partial<ReaderOptions>);
     /** The book being shown. */
     get book(): Book | undefined;
     get settings(): Readonly<ReaderSettings>;

@@ -13,6 +13,37 @@ export function prepare(doc) {
     for (const svg of doc.querySelectorAll('svg[preserveAspectRatio="none"]'))
         svg.removeAttribute('preserveAspectRatio');
 }
+const BY_ROWS = 'data-epub-viewer-rows';
+const TABLE_SIZE = '--epub-viewer-table-size';
+const TABLE_RULES = `
+  [${BY_ROWS}], [${BY_ROWS}] > * { display: block !important; }
+  [${BY_ROWS}] > tr, [${BY_ROWS}] > * > tr { display: table !important; }
+  [${BY_ROWS}], [${BY_ROWS}] > tr > :is(td, th), [${BY_ROWS}] > * > tr > :is(td, th) { box-sizing: border-box !important; inline-size: var(${TABLE_SIZE}) !important; }`;
+function splitLongTables(doc, vertical, room) {
+    const { setAttribute, removeAttribute, closest } = Element.prototype;
+    for (const table of doc.querySelectorAll(`[${BY_ROWS}]`))
+        removeAttribute.call(table, BY_ROWS);
+    const sizes = (el) => {
+        const { width, height } = el.getBoundingClientRect();
+        return vertical ? [height, width] : [width, height];
+    };
+    const long = [];
+    for (const table of doc.querySelectorAll('table')) {
+        if (!(table instanceof doc.defaultView.HTMLTableElement) || (table.parentElement && closest.call(table.parentElement, 'table')))
+            continue;
+        if (sizes(table)[1] <= room)
+            continue;
+        const cells = [...table.rows].flatMap((row) => [...row.cells]);
+        if (cells.some((cell) => cell.rowSpan > 1))
+            continue;
+        long.push([table, [table, ...cells].map((el) => [el, sizes(el)[0]])]);
+    }
+    for (const [table, sized] of long) {
+        setAttribute.call(table, BY_ROWS, '');
+        for (const [el, size] of sized)
+            el.style.setProperty(TABLE_SIZE, `${size}px`);
+    }
+}
 export function paginate(doc, style, width, height, bookWritingMode, options) {
     const { fontSize, lineHeight, margin: m, spread } = options;
     const [w, h] = [Math.floor(width), Math.floor(height)];
@@ -59,7 +90,9 @@ export function paginate(doc, style, width, height, bookWritingMode, options) {
       max-height: ${vertical ? `min(100%, ${h - 2 * m}px)` : `${h - 2 * m}px`} !important;
       object-fit: contain;
       break-inside: avoid;
-    }`;
+    }
+    ${TABLE_RULES}`;
+    splitLongTables(doc, vertical, (vertical ? w : h) - 2 * m);
     const scroller = doc.scrollingElement;
     const scrollSize = vertical ? scroller.scrollHeight : scroller.scrollWidth;
     const range = doc.createRange();

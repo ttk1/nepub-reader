@@ -57,5 +57,28 @@ class ThemeTest(unittest.TestCase):
         self.assertEqual((manifest["background_color"], manifest["theme_color"]), (background, background))
 
 
+class PageMarginTest(unittest.TestCase):
+    def test_margins_grow_with_the_toolbar_and_keep_room_for_the_progress_text(self):
+        # ツールバーを隠している間の進み具合の文字（reader.css）は、ページの下の余白に重ねて出す。
+        # 余白の選択肢（reader.js）は、いちばん狭いものでも文字が本文に重ならない広さにしていて、
+        # 広い画面では、文字を大きくするのと同じ幅から、同じ倍率で広げている。片方だけ変えると、文字が本文に重なる
+        css = read("reader.css")
+        wide = re.findall(
+            r"@media \(min-width: (\d+)px\) \{ \.epub-reader > \.toolbar, #status \{ zoom: ([\d.]+); \} \.epub-reader \{ --mini-size: (\d+)px; \} \}",
+            css,
+        )
+        self.assertEqual(len(wide), 3)
+        js = read("reader.js")
+        scales = json.loads(re.search(r"const WIDE_SCALES = (\[\[.*\]\])", js)[1])
+        self.assertEqual(scales, [[int(width), float(zoom)] for width, zoom, _ in wide])
+
+        narrowest = int(re.search(r"const margins = \[\[wide\((\d+)\)", js)[1])
+        size = int(re.search(r"\.epub-reader \{ --mini-size: (\d+)px; \}", css)[1])
+        below = int(re.search(r"\.mini-text \{[^}]*\bbottom: (\d+)px;", css)[1])
+        gap = 6  # 文字と本文の間。行末は余白ぴったりまで届くので、間がないとくっついて見える
+        for scale, text in [(1, size)] + [(float(zoom), int(mini)) for _, zoom, mini in wide]:
+            self.assertGreaterEqual(narrowest * scale, text + below + gap, f"{scale} 倍")
+
+
 if __name__ == "__main__":
     unittest.main()

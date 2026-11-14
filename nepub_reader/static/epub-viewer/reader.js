@@ -12,6 +12,13 @@ const DEFAULT_SETTINGS = {
     spread: 'auto',
     direction: 'auto',
 };
+const DEFAULT_CHOICES = {
+    lineHeight: [[0, '本の指定'], [1.3, '狭い'], [1.6, '標準'], [1.9, '広い'], [2.2, 'とても広い']],
+    maxWidth: [[0, '全幅'], [1400, '1400'], [1200, '1200'], [1000, '1000'], [800, '800'], [600, '600']],
+    margin: [[16, '狭い'], [32, '標準'], [64, '広い'], [96, 'とても広い']],
+};
+const DEFAULT_FONT_SIZE_STEPS = { min: 12, max: 120, step: 1.2 };
+const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const SEEK_KEYS = {
     ArrowLeft: 'goLeft',
     ArrowRight: 'goRight',
@@ -20,15 +27,15 @@ const SEEK_KEYS = {
     PageUp: 'prev',
     PageDown: 'next',
 };
-const choices = (name, label, options) => `
+const choices = (name, label, options) => !options.length ? '' : `
   <div class="row">
     <span>${label}</span>
     <span class="choices" role="radiogroup" aria-label="${label}">
-      ${options.map(([value, text, style = '']) => `<label><input type="radio" name="${name}" value="${value}"><span style="${style}">${text}</span></label>`).join('')}
+      ${options.map(([value, text, style = '']) => `<label><input type="radio" name="${name}" value="${escapeHtml(value)}"><span style="${style}">${escapeHtml(text)}</span></label>`).join('')}
     </span>
   </div>`;
 const swatch = ({ background, color }) => `background:${background};color:${color}`;
-const TOOLBAR = `
+const toolbar = (offered) => `
   <details class="toc" hidden>
     <summary>目次</summary>
     <div class="panel toc-list"></div>
@@ -49,9 +56,9 @@ const TOOLBAR = `
           </span>
         </div>
         ${choices('font', 'フォント', [['mincho', '明朝'], ['gothic', 'ゴシック'], ['book', '本の指定']])}
-        ${choices('lineHeight', '行間', [[0, '本の指定'], [1.3, '狭い'], [1.6, '標準'], [1.9, '広い'], [2.2, 'とても広い']])}
-        ${choices('maxWidth', '表示幅', [[0, '全幅'], [1400, '1400'], [1200, '1200'], [1000, '1000'], [800, '800'], [600, '600']])}
-        ${choices('margin', '余白', [[16, '狭い'], [32, '標準'], [64, '広い'], [96, 'とても広い']])}
+        ${choices('lineHeight', '行間', offered.lineHeight)}
+        ${choices('maxWidth', '表示幅', offered.maxWidth)}
+        ${choices('margin', '余白', offered.margin)}
         ${choices('writingMode', '表示方向', [['auto', '自動'], ['vertical', '縦書き'], ['horizontal', '横書き']])}
       </div>
       <div class="not-vertical">
@@ -178,6 +185,7 @@ export class EpubReader {
     #root;
     #storage;
     #storageKey;
+    #fontSizeSteps;
     #systemDark = matchMedia('(prefers-color-scheme: dark)');
     #settings;
     #positionKey = '';
@@ -188,16 +196,17 @@ export class EpubReader {
     #menuObserver = new MutationObserver(() => {
         this.#root.classList.toggle('menu-open', !!this.toolbar.querySelector('details[open]'));
     });
-    constructor(root, { storage = defaultStorage(), storageKey = 'epub-viewer', settings = {}, viewer = {} } = {}) {
+    constructor(root, { storage = defaultStorage(), storageKey = 'epub-viewer', settings = {}, viewer = {}, choices: offered = {}, fontSizeSteps = {} } = {}) {
         const doc = root.ownerDocument;
         if (!doc.getElementById('epub-reader-style')) {
             doc.head.append(Object.assign(doc.createElement('style'), { id: 'epub-reader-style', textContent: STYLE }));
         }
         root.classList.add('epub-reader');
-        root.innerHTML = `<header class="toolbar">${TOOLBAR}</header><div class="viewer"></div>`;
+        root.innerHTML = `<header class="toolbar">${toolbar({ ...DEFAULT_CHOICES, ...offered })}</header><div class="viewer"></div>`;
         this.#root = root;
         this.#storage = storage;
         this.#storageKey = storageKey;
+        this.#fontSizeSteps = { ...DEFAULT_FONT_SIZE_STEPS, ...fontSizeSteps };
         this.toolbar = root.querySelector('.toolbar');
         this.viewer = new EpubViewer(root.querySelector('.viewer'), viewer);
         const usable = ([key, value]) => Object.hasOwn(DEFAULT_SETTINGS, key) && typeof value === typeof DEFAULT_SETTINGS[key] && value === value;
@@ -317,8 +326,10 @@ export class EpubReader {
     #onClick = (e) => {
         const control = e.target.closest('button, summary, .settings input, .seek');
         if (control?.matches('.font-up, .font-down')) {
-            const ratio = control.matches('.font-up') ? 1.2 : 1 / 1.2;
-            this.setSettings({ fontSize: Math.min(120, Math.max(12, Math.round(this.#settings.fontSize * ratio))) });
+            const { min, max, step } = this.#fontSizeSteps;
+            const size = this.#settings.fontSize;
+            const next = control.matches('.font-up') ? Math.max(size + 1, Math.round(size * step)) : Math.min(size - 1, Math.round(size / step));
+            this.setSettings({ fontSize: Math.min(max, Math.max(min, next)) });
         }
         else if (control?.matches('.toc-list button')) {
             this.#closeMenus();

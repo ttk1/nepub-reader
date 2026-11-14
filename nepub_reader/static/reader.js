@@ -43,12 +43,62 @@ const settingsStorage = {
   },
 }
 
+// ---- 表示設定（EpubReader の設定メニュー）の初期値と選択肢 ----
+
 // EpubReader の既定の文字サイズ（45px）は、離れて読む大きな画面向け。スマートフォンでは 1 ページに
 // 数文字しか入らないので、狭い画面では初期値を小さくする（利用者が変えた後は、その値が使われる）。
 // 横向きのスマートフォンは幅が広いので、高さでも見る
-const settings = matchMedia('(max-width: 600px), (max-height: 600px)').matches ? { fontSize: 24 } : {}
+const smallScreen = matchMedia('(max-width: 600px), (max-height: 600px)').matches ? { fontSize: 24 } : {}
+// 文字サイズのボタンは、1 回で 1.1 倍にする。既定の 1.2 倍では、スマートフォンで 1 段の差が大きく
+// （24 → 29px で、1 ページの行が 1〜2 行変わる）、ちょうどよい大きさを選べない
+const FONT_SIZE_STEP = 1.1
 
-const reader = new EpubReader(document.getElementById('reader'), { storage: settingsStorage, storageKey: READER_STORAGE_KEY, settings })
+// 行間。nepub の EPUB は行間を指定しないので、既定の選択肢にある「本の指定」は「標準」と同じ表示になる。
+// それを除いて、刻みを細かくする（既定は 0.3 刻み）
+const DEFAULT_LINE_HEIGHT = 1.6
+/** @type {[number, string][]} */
+const lineHeights = [[1.4, '狭い'], [DEFAULT_LINE_HEIGHT, '標準'], [1.8, 'やや広い'], [2, '広い'], [2.2, 'とても広い']]
+
+// 表示幅は、この画面で選んで変わるもの（画面の幅より狭いもの）だけを並べる。1 つもなければ（スマートフォン）、
+// 設定メニューに出さない。広い画面で少しだけ狭めることもできるように、既定の選択肢（1400 まで）より広いものも用意する
+// 並べるのは広いほうから 5 つまで（設定メニューの 1 行に収まる数。広い画面で 600px まで狭めることは、まずない）
+const narrower = [2400, 1800, 1400, 1200, 1000, 800, 600].filter((px) => px < innerWidth).slice(0, 5)
+/** @type {[number, string][]} */
+const maxWidths = narrower.length ? [[0, '全幅'], ...narrower.map((px) => /** @type {[number, string]} */ ([px, String(px)]))] : []
+
+// 広い画面では、ツールバーなどを拡大している。余白も、同じ幅から同じ倍率で広げる
+// （[幅, 倍率]。reader.css の末尾と同じ値。そろっていることは tests/test_static.py が確かめている）
+const WIDE_SCALES = [[2400, 1.25], [3000, 1.5], [3600, 1.75]]
+const wideScale = WIDE_SCALES.reduce((scale, [width, wider]) => (matchMedia(`(min-width: ${width}px)`).matches ? wider : scale), 1)
+// ページの余白の選択肢。ツールバーを隠している間の進み具合の文字を、下の余白に重ねて出す（reader.css）ので、
+// いちばん狭い余白でも、その文字が本文に重ならずに収まる広さにする（文字 12px + その下 2px + 本文との間 6px。
+// スマートフォンでは、これより広げると 1 ページの行が 1 行減る）
+const wide = (px) => px * wideScale
+/** @type {[number, string][]} */
+const margins = [[wide(20), '狭い'], [wide(32), '標準'], [wide(64), '広い'], [wide(96), 'とても広い'], [wide(128), '特大'], [wide(160), '最大']]
+
+const reader = new EpubReader(document.getElementById('reader'), {
+  storage: settingsStorage,
+  storageKey: READER_STORAGE_KEY,
+  settings: { ...smallScreen, lineHeight: DEFAULT_LINE_HEIGHT, margin: wide(32) },
+  choices: { lineHeight: lineHeights, maxWidth: maxWidths, margin: margins },
+  fontSizeSteps: { step: FONT_SIZE_STEP },
+})
+
+/**
+ * 保存されていた設定が選択肢にないとき（選択肢を変える前の値、幅の違う画面で選んだ値）は、いちばん近い選択肢に寄せる。
+ * 表示幅は寄せない（画面より広い値は、選択肢になくても全幅と同じ表示で、広い画面で開いたときにまた効く）
+ * @param {'lineHeight' | 'margin'} name
+ * @param {[number, string][]} choices
+ * @param {number} saved
+ */
+function snapToChoices(name, choices, saved) {
+  const nearest = choices.map(([value]) => value).reduce((a, b) => (Math.abs(b - saved) < Math.abs(a - saved) ? b : a))
+  if (nearest !== reader.settings[name]) reader.setSettings({ [name]: nearest })
+}
+// 行間の 0 は、以前の選択肢の「本の指定」
+snapToChoices('lineHeight', lineHeights, reader.settings.lineHeight || DEFAULT_LINE_HEIGHT)
+snapToChoices('margin', margins, reader.settings.margin)
 const { toolbar, viewer } = reader
 /** @type {HTMLElement} */
 const title = toolbar.querySelector('.title')
@@ -79,10 +129,6 @@ const root = toolbar.parentElement
 const miniLine = el('span', { className: 'mini-line' })
 const miniText = el('span', { className: 'mini-text' })
 const miniProgress = root.appendChild(el('div', { className: 'mini-progress', hidden: true }, miniLine, miniText))
-// ページの余白（表示設定）。余白が進み具合の文字より狭いときに、足りない分だけページの下を空けるのに使う（reader.css）。
-// 設定を変えると本文が組み直されて relocate が起きるので、そのたびに入れ直す
-const setPageMargin = () => root.style.setProperty('--page-margin', `${reader.settings.margin}px`)
-setPageMargin()
 viewer.addEventListener('relocate', (e) => {
   const { page, pages, fraction, rtl } = e.detail
   // ツールバーの進み具合と同じ書き方にする
@@ -90,7 +136,6 @@ viewer.addEventListener('relocate', (e) => {
   miniLine.style.setProperty('--fraction', String(fraction))
   // 線は、ページが進む向きに伸びる（縦書きでは右から）
   miniLine.dataset.from = rtl ? 'right' : 'left'
-  setPageMargin()
 })
 
 /** 知らせを出す（'' で消す）。action は一緒に出すボタン { label, run } */
